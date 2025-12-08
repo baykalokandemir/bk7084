@@ -3,6 +3,8 @@ import math
 import numpy as np
 from pyglm import glm
 from .polygon import Polygon
+from framework.shapes.shape import Shape
+from .road_network import RoadNetwork
 
 class AdvancedCityGenerator:
     def __init__(self, width=400.0, depth=400.0, min_block_area=4000.0, min_lot_area=1000.0, ortho_chance=0.9, town_square_radius=40.0):
@@ -24,59 +26,85 @@ class AdvancedCityGenerator:
         self.blocks = [] 
         self.lots = []   
         self.buildings = [] 
-        self.parks = [] # List of Shapes (Green spaces)
+        self.parks = [] 
+        self.roads = [] # List of Shapes (Road segments)
+        self.sidewalks = [] # List of Shapes
+        self.road_network = None
 
     def generate(self):
         self.blocks = []
         self.lots = []
         self.buildings = []
         self.parks = []
+        self.roads = []
+        self.sidewalks = []
+        self.road_network = RoadNetwork()
         
         # 1. Carve out Town Square
         city_sectors, town_square_poly = self._create_town_square(self.root)
         
         # Process Town Square
         if town_square_poly:
-            # Shrink for Roundabout
-            park_poly = town_square_poly.scale(0.8) # Bigger gap for roundabout
+            # Roundabout Road (Outer Ring)
+            # Connects to spoke roads at town_square_poly boundary
+            road_width = 12.0
+            road_inner = town_square_poly.inset(road_width)
+            self._generate_roundabout_mesh(town_square_poly, road_inner)
+            
+            # Sidewalk (Inner Ring, adjacent to park)
+            sidewalk_width = 4.0
+            sidewalk_inner = road_inner.inset(sidewalk_width)
+            self._generate_sidewalk(road_inner, sidewalk_inner)
+            
+            # Park (Center)
+            park_poly = sidewalk_inner
             
             # Extrude slightly (grass)
             park_shape = park_poly.extrude(0.5)
-            # Color will be handled in renderer or here if we support vertex colors
-            # Let's set vertex colors to Green
             park_shape.colors = np.array([[0.2, 0.8, 0.2, 1.0]] * len(park_shape.vertices), dtype=np.float32)
             self.parks.append(park_shape)
         
         # 2. Generate Blocks (City Layout) from Sectors
         raw_blocks = []
-        for sector in city_sectors:
-            self._split_city_recursive(sector, raw_blocks, 0)
         
-        # 3. Process Blocks
+        for sector in city_sectors:
+            # Start at depth 1 so sectors are split into 4-lane roads, then 2-lane.
+            self._split_city_recursive(sector, raw_blocks, 1)
+        
+        # 3. Generate Road Meshes from Network
+        self.roads.extend(self.road_network.generate_meshes())
+        
+        # 4. Process Blocks & Sidewalks
         for raw_block in raw_blocks:
             # Shrink to create road gaps
-            block = raw_block.scale(0.85) 
+            # Sidewalk Outer (Curb)
+            curb_poly = raw_block.inset(3.0)
+            
+            # Sidewalk Inner (Building Lot)
+            block = curb_poly.inset(2.0)
+            
             self.blocks.append(block)
             
-            # 4. Subdivide Block into Lots
+            # Generate Sidewalk Mesh
+            self._generate_sidewalk(curb_poly, block)
+            
+            # 5. Subdivide Block into Lots
             block_lots = []
             self._split_block_recursive(block, block_lots, 0)
             self.lots.extend(block_lots)
             
-        # 5. Generate Buildings
-        from .building import Building # Import here to avoid circular dep if any
+        # 6. Generate Buildings
+        from .building import Building 
         
         for lot in self.lots:
             # Random Corner Style
             r = random.random()
             if r < 0.2:
-                # Chamfer
                 lot = lot.chamfer(random.uniform(2.0, 5.0))
             elif r < 0.4:
-                # Fillet (Rounded)
                 lot = lot.fillet(random.uniform(2.0, 5.0), segments=4)
                 
-            height = random.uniform(10.0, 40.0) # Taller buildings
+            height = random.uniform(10.0, 40.0) 
             
             # Random Style
             style = {
@@ -85,13 +113,117 @@ class AdvancedCityGenerator:
                 "inset_depth": random.uniform(0.2, 0.8),
                 "color": glm.vec4(random.uniform(0.7, 0.9), random.uniform(0.7, 0.9), random.uniform(0.7, 0.9), 1.0),
                 "window_color": glm.vec4(0.1, 0.2, 0.3 + random.random()*0.3, 1.0),
-                "stepped": (height > 25.0) and (random.random() < 0.4), # 40% chance for tall buildings
+                "stepped": (height > 25.0) and (random.random() < 0.4), 
                 "window_style": "vertical_stripes" if random.random() < 0.5 else "single"
             }
             
             building = Building(lot, height, style)
             shape = building.generate()
             self.buildings.append(shape)
+
+    def _generate_roundabout_mesh(self, outer, inner):
+        # Similar to sidewalk but asphalt
+        shape = Shape()
+        verts = []
+        norms = []
+        cols = []
+        inds = []
+        
+        color = glm.vec4(0.2, 0.2, 0.2, 1.0) # Asphalt
+        y = 0.055 # Roundabout is a main artery, so high priority
+        
+        n = len(outer.vertices)
+        start_idx = 0
+        
+        for i in range(n):
+            o1 = outer.vertices[i]
+            o2 = outer.vertices[(i+1)%n]
+            i1 = inner.vertices[i]
+            i2 = inner.vertices[(i+1)%n]
+            
+            # Quad
+            verts.extend([
+                glm.vec4(o1.x, y, o1.y, 1.0),
+                glm.vec4(o2.x, y, o2.y, 1.0),
+                glm.vec4(i2.x, y, i2.y, 1.0),
+                glm.vec4(i1.x, y, i1.y, 1.0)
+            ])
+            norms.extend([glm.vec3(0, 1, 0)] * 4)
+            cols.extend([color] * 4)
+            
+            base = start_idx + i * 4
+            inds.extend([base, base+1, base+2, base, base+2, base+3])
+            
+        shape.vertices = np.array([v.to_list() for v in verts], dtype=np.float32)
+        shape.normals = np.array([n.to_list() for n in norms], dtype=np.float32)
+        shape.uvs = np.zeros((len(verts), 2), dtype=np.float32)
+        shape.colors = np.array([c.to_list() for c in cols], dtype=np.float32)
+        shape.indices = np.array(inds, dtype=np.uint32)
+        
+        self.roads.append(shape)
+
+    def _generate_sidewalk(self, outer, inner):
+        # Create a mesh for the ring between outer and inner
+        # Elevated at y=0.2
+        shape = Shape()
+        verts = []
+        norms = []
+        cols = []
+        inds = []
+        
+        color = glm.vec4(0.7, 0.7, 0.7, 1.0) # Light Gray
+        y = 0.2
+        
+        # We assume outer and inner have same vertex count and winding
+        n = len(outer.vertices)
+        if len(inner.vertices) != n: return # Should match if scaled
+        
+        start_idx = 0
+        
+        for i in range(n):
+            o1 = outer.vertices[i]
+            o2 = outer.vertices[(i+1)%n]
+            i1 = inner.vertices[i]
+            i2 = inner.vertices[(i+1)%n]
+            
+            # Quad: o1, o2, i2, i1
+            verts.extend([
+                glm.vec4(o1.x, y, o1.y, 1.0),
+                glm.vec4(o2.x, y, o2.y, 1.0),
+                glm.vec4(i2.x, y, i2.y, 1.0),
+                glm.vec4(i1.x, y, i1.y, 1.0)
+            ])
+            norms.extend([glm.vec3(0, 1, 0)] * 4)
+            cols.extend([color] * 4)
+            
+            base = start_idx + i * 4
+            inds.extend([base, base+1, base+2, base, base+2, base+3])
+            
+            # Curb (Side face)
+            # o1 -> o2 down to y=0
+            verts.extend([
+                glm.vec4(o1.x, y, o1.y, 1.0),
+                glm.vec4(o2.x, y, o2.y, 1.0),
+                glm.vec4(o2.x, 0, o2.y, 1.0),
+                glm.vec4(o1.x, 0, o1.y, 1.0)
+            ])
+            # Normal approx
+            edge = o2 - o1
+            norm = glm.normalize(glm.vec3(-edge.y, 0, edge.x))
+            norms.extend([norm] * 4)
+            cols.extend([color] * 4)
+            
+            base_curb = start_idx + n * 4 + i * 4
+            inds.extend([base_curb, base_curb+1, base_curb+2, base_curb, base_curb+2, base_curb+3])
+
+        shape.vertices = np.array([v.to_list() for v in verts], dtype=np.float32)
+        shape.normals = np.array([n.to_list() for n in norms], dtype=np.float32)
+        shape.uvs = np.zeros((len(verts), 2), dtype=np.float32)
+        shape.colors = np.array([c.to_list() for c in cols], dtype=np.float32)
+        shape.indices = np.array(inds, dtype=np.uint32)
+        
+        self.sidewalks.append(shape)
+
 
     def _create_town_square(self, root_poly):
         """
@@ -118,6 +250,16 @@ class AdvancedCityGenerator:
             split_point = v1
             split_dir = glm.normalize(v2 - v1)
             
+            # Capture Spoke Road (Main Artery)
+            # Find intersection with CURRENT center_poly
+            intersections = center_poly.intersect_line(split_point, split_dir)
+            if len(intersections) >= 2:
+                p1 = intersections[0]
+                p2 = intersections[1]
+                # Add to RoadNetwork
+                if self.road_network:
+                    self.road_network.add_segment(p1, p2, 20.0, 6)
+            
             poly1, poly2 = center_poly.split(split_point, split_dir)
             
             if poly1 and poly2:
@@ -129,7 +271,6 @@ class AdvancedCityGenerator:
                     center_poly = poly2
                     outside_polys.append(poly1)
             else:
-                # Split failed? Should not happen if root covers center.
                 pass
                 
         return outside_polys, center_poly
@@ -138,11 +279,59 @@ class AdvancedCityGenerator:
         # Recursively split until min_block_area is reached
         area = self._get_area(poly)
         
-        if area < self.min_block_area or depth > 6: # Reduced depth
+        if area < self.min_block_area or depth > 6: 
             result_list.append(poly)
             return
 
-        self._attempt_split(poly, result_list, depth, self._split_city_recursive, gap=False)
+        # Attempt Split
+        min_x, min_y, max_x, max_y = self._get_bounds(poly)
+        cx, cy = (min_x + max_x) / 2, (min_y + max_y) / 2
+        dx, dy = (max_x - min_x) / 2, (max_y - min_y) / 2
+        
+        split_point = glm.vec2(
+            random.uniform(cx - dx*0.4, cx + dx*0.4),
+            random.uniform(cy - dy*0.4, cy + dy*0.4)
+        )
+        
+        # Determine Angle based on Aspect Ratio
+        width = max_x - min_x
+        height = max_y - min_y
+        aspect = width / height if height > 0 else 1.0
+        
+        if random.random() < self.ortho_chance:
+            if aspect > 1.5: angle = math.pi / 2
+            elif aspect < 0.66: angle = 0
+            else: angle = 0 if random.random() < 0.5 else math.pi / 2
+        else:
+            angle = random.uniform(0, math.pi * 2)
+            
+        split_dir = glm.vec2(math.cos(angle), math.sin(angle))
+        
+        poly1, poly2 = poly.split(split_point, split_dir)
+        
+        if poly1 and poly2:
+            # Record Road Segment
+            if self.road_network:
+                # Find intersection of split line with poly
+                intersections = poly.intersect_line(split_point, split_dir)
+                if len(intersections) >= 2:
+                    p1 = intersections[0]
+                    p2 = intersections[1]
+                    
+                    # Determine width/lanes based on depth
+                    if depth == 0:
+                        w, l = 20.0, 6
+                    elif depth == 1:
+                        w, l = 14.0, 4
+                    else:
+                        w, l = 8.0, 2
+                        
+                    self.road_network.add_segment(p1, p2, w, l)
+
+            self._split_city_recursive(poly1, result_list, depth + 1)
+            self._split_city_recursive(poly2, result_list, depth + 1)
+        else:
+            result_list.append(poly)
 
     def _split_block_recursive(self, poly, result_list, depth):
         # Recursively split until min_lot_area is reached
@@ -213,3 +402,10 @@ class AdvancedCityGenerator:
             v2 = poly.vertices[(i + 1) % n]
             area += (v1.x * v2.y - v2.x * v1.y)
         return abs(area) * 0.5
+
+    def _get_bounds(self, poly):
+        min_x = min(v.x for v in poly.vertices)
+        max_x = max(v.x for v in poly.vertices)
+        min_y = min(v.y for v in poly.vertices)
+        max_y = max(v.y for v in poly.vertices)
+        return min_x, min_y, max_x, max_y

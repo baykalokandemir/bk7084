@@ -341,3 +341,96 @@ class Polygon:
             new_verts.append(p2)
             
         return Polygon(new_verts)
+
+    def intersect_line(self, line_point, line_dir):
+        """
+        Finds the intersection points of an infinite line with the polygon edges.
+        Returns a list of glm.vec2 points.
+        """
+        intersections = []
+        n = len(self.vertices)
+        
+        for i in range(n):
+            p1 = self.vertices[i]
+            p2 = self.vertices[(i + 1) % n]
+            
+            # Edge segment
+            edge_vec = p2 - p1
+            
+            # Check intersection between Segment (p1, p2) and Line (line_point, line_dir)
+            # p1 + t * edge_vec = line_point + u * line_dir
+            # Cross product method to solve 2D linear system
+            
+            # v x w = v.x * w.y - v.y * w.x
+            def cross(v, w):
+                return v.x * w.y - v.y * w.x
+                
+            denom = cross(edge_vec, line_dir)
+            
+            if abs(denom) > 1e-6:
+                t = cross(line_point - p1, line_dir) / denom
+                
+                # Check if t is within segment [0, 1]
+                if 0 <= t <= 1:
+                    pt = p1 + t * edge_vec
+                    intersections.append(pt)
+                    
+        return intersections
+
+    def inset(self, amount):
+        """
+        Shrinks the polygon by moving edges inward by 'amount'.
+        Assumes convex polygon (CCW winding).
+        Returns a new Polygon.
+        """
+        if amount <= 0: return self
+        
+        new_verts = []
+        n = len(self.vertices)
+        
+        # Line equations: P + t * D
+        # We need to find intersection of shifted lines.
+        
+        for i in range(n):
+            # Current vertex and neighbors
+            curr_v = self.vertices[i]
+            prev_v = self.vertices[(i - 1) % n]
+            next_v = self.vertices[(i + 1) % n]
+            
+            # Edge vectors
+            v_in = glm.normalize(curr_v - prev_v)
+            v_out = glm.normalize(next_v - curr_v)
+            
+            # Normals (CCW)
+            # Normal is (-dy, dx)
+            n1 = glm.vec2(-v_in.y, v_in.x)
+            n2 = glm.vec2(-v_out.y, v_out.x)
+            
+            # Shifted lines pass through:
+            # L1: (prev_v + n1 * amount) + t * v_in
+            # L2: (curr_v + n2 * amount) + u * v_out
+            
+            p1_s = prev_v + n1 * amount
+            p2_s = curr_v + n2 * amount
+            
+            # Find intersection of L1 and L2
+            # p1_s + t * v_in = p2_s + u * v_out
+            # t * v_in - u * v_out = p2_s - p1_s
+            
+            # Solve 2D system
+            # | v_in.x  -v_out.x | | t | = | dx |
+            # | v_in.y  -v_out.y | | u |   | dy |
+            
+            det = v_in.x * (-v_out.y) - v_in.y * (-v_out.x)
+            
+            if abs(det) < 1e-6:
+                # Parallel edges? Just use the shifted point
+                new_verts.append(curr_v + n1 * amount)
+            else:
+                delta = p2_s - p1_s
+                t = (delta.x * (-v_out.y) - delta.y * (-v_out.x)) / det
+                
+                pt = p1_s + t * v_in
+                new_verts.append(pt)
+                
+        return Polygon(new_verts)

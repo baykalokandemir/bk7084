@@ -70,6 +70,15 @@ def main():
             col = glm.vec4(0.2, 0.8, 0.2, 1.0)
             batcher.add_shape(shape, color=col)
             
+        # Batch Roads (Asphalt + Stripes)
+        # They have their own colors in the shape, so pass color=None to use vertex colors
+        for shape in generator.roads:
+            batcher.add_shape(shape)
+            
+        # Batch Sidewalks (Gray)
+        for shape in generator.sidewalks:
+            batcher.add_shape(shape)
+            
         mat = Material()
         # Use vertex colors
         # Ensure shader uses vertex colors. Default shader usually does if available.
