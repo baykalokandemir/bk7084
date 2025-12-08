@@ -45,16 +45,37 @@ class AdvancedCityGenerator:
         
         # Process Town Square
         if town_square_poly:
-            # Roundabout Road (Outer Ring)
-            # Connects to spoke roads at town_square_poly boundary
-            road_width = 12.0
-            road_inner = town_square_poly.inset(road_width)
-            self._generate_roundabout_mesh(town_square_poly, road_inner)
+            # Generate Roundabout Ring (Closed Loop)
+            # Iterate vertices of the final town_square_poly
+            # These vertices correspond to the endpoints of the spoke roads (s2, s3 from _create_town_square)
+            # So connecting them creates the ring, and they should snap to the spoke nodes.
             
+            verts = town_square_poly.vertices
+            n = len(verts)
+            for i in range(n):
+                v1 = verts[i]
+                v2 = verts[(i+1)%n]
+                # Width 14.0 (3 lanes + spacing)
+                self.road_network.add_segment(v1, v2, 14.0, 4)
+
             # Sidewalk (Inner Ring, adjacent to park)
-            sidewalk_width = 4.0
-            sidewalk_inner = road_inner.inset(sidewalk_width)
-            self._generate_sidewalk(road_inner, sidewalk_inner)
+            # The RoadNetwork now generates the road at the boundary of town_square_poly.
+            # town_square_poly IS the inner edge of the road ring?
+            # No, town_square_poly is the hexagon defined by v1-v2.
+            # In _create_town_square, we added v1-v2 as the road segment.
+            # So the road runs ALONG the edge of town_square_poly.
+            # Width 14.0. So it extends 7.0 inside and 7.0 outside.
+            
+            # We want a sidewalk INSIDE the road.
+            # So we need to inset town_square_poly by 7.0 (half road) + sidewalk_width.
+            
+            half_road_w = 7.0
+            sidewalk_w = 4.0
+            
+            sidewalk_outer = town_square_poly.inset(half_road_w)
+            sidewalk_inner = sidewalk_outer.inset(sidewalk_w)
+            
+            self._generate_sidewalk(sidewalk_outer, sidewalk_inner)
             
             # Park (Center)
             park_poly = sidewalk_inner
@@ -121,46 +142,6 @@ class AdvancedCityGenerator:
             shape = building.generate()
             self.buildings.append(shape)
 
-    def _generate_roundabout_mesh(self, outer, inner):
-        # Similar to sidewalk but asphalt
-        shape = Shape()
-        verts = []
-        norms = []
-        cols = []
-        inds = []
-        
-        color = glm.vec4(0.2, 0.2, 0.2, 1.0) # Asphalt
-        y = 0.055 # Roundabout is a main artery, so high priority
-        
-        n = len(outer.vertices)
-        start_idx = 0
-        
-        for i in range(n):
-            o1 = outer.vertices[i]
-            o2 = outer.vertices[(i+1)%n]
-            i1 = inner.vertices[i]
-            i2 = inner.vertices[(i+1)%n]
-            
-            # Quad
-            verts.extend([
-                glm.vec4(o1.x, y, o1.y, 1.0),
-                glm.vec4(o2.x, y, o2.y, 1.0),
-                glm.vec4(i2.x, y, i2.y, 1.0),
-                glm.vec4(i1.x, y, i1.y, 1.0)
-            ])
-            norms.extend([glm.vec3(0, 1, 0)] * 4)
-            cols.extend([color] * 4)
-            
-            base = start_idx + i * 4
-            inds.extend([base, base+1, base+2, base, base+2, base+3])
-            
-        shape.vertices = np.array([v.to_list() for v in verts], dtype=np.float32)
-        shape.normals = np.array([n.to_list() for n in norms], dtype=np.float32)
-        shape.uvs = np.zeros((len(verts), 2), dtype=np.float32)
-        shape.colors = np.array([c.to_list() for c in cols], dtype=np.float32)
-        shape.indices = np.array(inds, dtype=np.uint32)
-        
-        self.roads.append(shape)
 
     def _generate_sidewalk(self, outer, inner):
         # Create a mesh for the ring between outer and inner
@@ -252,13 +233,43 @@ class AdvancedCityGenerator:
             
             # Capture Spoke Road (Main Artery)
             # Find intersection with CURRENT center_poly
+            # Note: center_poly is shrinking, but for the first cut it's root_poly.
+            # Actually, we want the intersection with the ROOT poly (or the current outer boundary).
+            # But center_poly is the one being cut.
+            # The split line is v1->v2.
+            # Intersections with center_poly will be p1, p2.
+            # Since v1, v2 are inside center_poly (before cut), p1 and p2 must be outside v1-v2 segment?
+            # No, v1, v2 are ON the cut line.
+            # p1, p2 are on the boundary of center_poly.
+            # So p1, p2 bracket v1, v2.
+            
             intersections = center_poly.intersect_line(split_point, split_dir)
             if len(intersections) >= 2:
                 p1 = intersections[0]
                 p2 = intersections[1]
-                # Add to RoadNetwork
+                
+                # Sort points along the line direction
+                points = [p1, p2, v1, v2]
+                # Project onto split_dir
+                points.sort(key=lambda p: glm.dot(p - v1, split_dir))
+                
+                # Expected order: SpokeStart -> v1 -> v2 -> SpokeEnd
+                # But v1, v2 might be swapped relative to p1, p2 depending on poly shape?
+                # v1 is at 0 projection (relative to v1). v2 is at dist.
+                # p1, p2 should be at negative and >dist.
+                
+                s1, s2, s3, s4 = points[0], points[1], points[2], points[3]
+                
+                # Add segments to RoadNetwork
                 if self.road_network:
-                    self.road_network.add_segment(p1, p2, 20.0, 6)
+                    # Spoke 1: s1 -> s2
+                    self.road_network.add_segment(s1, s2, 20.0, 6)
+                    
+                    # Ring Segment: s2 -> s3 (REMOVED - Will be added later as a closed loop)
+                    # self.road_network.add_segment(s2, s3, 14.0, 4)
+                    
+                    # Spoke 2: s3 -> s4
+                    self.road_network.add_segment(s3, s4, 20.0, 6)
             
             poly1, poly2 = center_poly.split(split_point, split_dir)
             

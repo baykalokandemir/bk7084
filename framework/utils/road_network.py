@@ -257,8 +257,17 @@ class RoadNetwork:
                     # Intersect
                     det = d1.x * (-d2.y) - d1.y * (-d2.x)
                     
-                    if abs(det) < 1e-3:
-                        # Parallel
+                    # Check for parallel or near-parallel (obtuse angle)
+                    # d1 points INTO node, d2 points OUT of node?
+                    # No, d1 and d2 are edge directions.
+                    # If roads are 180 deg apart, d1 approx -d2.
+                    # So dot(d1, d2) approx -1.
+                    
+                    dot = glm.dot(d1, d2)
+                    
+                    if abs(det) < 1e-3 or dot < -0.95:
+                        # Parallel or Obtuse (Straight-ish)
+                        # Just use the start point of the first edge
                         corner = p1_s
                     else:
                         delta = p2_s - p1_s
@@ -377,60 +386,6 @@ class RoadNetwork:
             cols = [glm.vec4(0.2, 0.2, 0.2, 1.0)] * 4
             inds = [0, 1, 2, 0, 2, 3]
             
-            # Stripes
-            # Use original p1, p2 for direction, but trimmed length
-            # Center line start: (P1_Left + P1_Right)/2
-            # Center line end: (P2_Left + P2_Right)/2
-            
-            c_start = (p1_left + p1_right) * 0.5
-            c_end = (p2_left + p2_right) * 0.5
-            
-            length = glm.distance(c_start, c_end)
-            dir_vec = glm.normalize(c_end - c_start)
-            perp = glm.vec2(-dir_vec.y, dir_vec.x)
-            
-            stripe_color = glm.vec4(1.0, 1.0, 1.0, 1.0)
-            
-
-            dash_len = 2.0
-            gap_len = 2.0
-            period = dash_len + gap_len
-            count = int(length / period)
-            
-            lane_width = width / lanes
-            half_w = width / 2.0
-            
-            dividers = []
-            for i in range(1, lanes):
-                offset = -half_w + lane_width * i
-                dividers.append(offset)
-                
-            stripe_color = glm.vec4(1.0, 1.0, 1.0, 1.0)
-            
-            for off in dividers:
-                l_start = c_start + perp * off
-                
-                for k in range(count):
-                    dist = k * period
-                    d_s = l_start + dir_vec * dist
-                    d_e = d_s + dir_vec * dash_len
-                    
-                    dw = 0.15
-                    d1 = d_s + perp * dw
-                    d2 = d_s - perp * dw
-                    d3 = d_e - perp * dw
-                    d4 = d_e + perp * dw
-                    
-                    idx = len(verts)
-                    verts.extend([
-                        glm.vec4(d1.x, y + 0.01, d1.y, 1.0),
-                        glm.vec4(d2.x, y + 0.01, d2.y, 1.0),
-                        glm.vec4(d3.x, y + 0.01, d3.y, 1.0),
-                        glm.vec4(d4.x, y + 0.01, d4.y, 1.0)
-                    ])
-                    norms.extend([glm.vec3(0, 1, 0)] * 4)
-                    cols.extend([stripe_color] * 4)
-                    inds.extend([idx, idx+1, idx+2, idx, idx+2, idx+3])
             
             shape.vertices = np.array([v.to_list() for v in verts], dtype=np.float32)
             shape.normals = np.array([n.to_list() for n in norms], dtype=np.float32)
