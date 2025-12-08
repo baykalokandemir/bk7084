@@ -65,6 +65,11 @@ def main():
             col = glm.vec4(random.random(), random.random(), random.random(), 1.0)
             batcher.add_shape(shape, color=col)
             
+        # Batch Parks (Green)
+        for shape in generator.parks:
+            col = glm.vec4(0.2, 0.8, 0.2, 1.0)
+            batcher.add_shape(shape, color=col)
+            
         mat = Material()
         # Use vertex colors
         # Ensure shader uses vertex colors. Default shader usually does if available.

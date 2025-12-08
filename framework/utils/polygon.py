@@ -236,3 +236,108 @@ class Polygon:
             # v_new = c + (v - c) * factor
             new_verts.append(c + (v - c) * factor)
         return Polygon(new_verts)
+
+    def contains_point(self, point):
+        """
+        Checks if the point is inside the convex polygon.
+        """
+        # Check if point is on the same side of all edges
+        n = len(self.vertices)
+        for i in range(n):
+            v1 = self.vertices[i]
+            v2 = self.vertices[(i + 1) % n]
+            edge = v2 - v1
+            to_point = point - v1
+            
+            # Cross product (2D) = x1*y2 - x2*y1
+            cross = edge.x * to_point.y - edge.y * to_point.x
+            
+            # Assuming CCW winding, point must be to the left (cross > 0)
+            # Allow some tolerance
+            if cross < -1e-5:
+                return False
+        return True
+
+    def chamfer(self, radius):
+        """
+        Chamfers the corners of the polygon.
+        radius: Size of the chamfer cut.
+        Returns a new Polygon.
+        """
+        if radius <= 0:
+            return self
+            
+        new_verts = []
+        n = len(self.vertices)
+        
+        for i in range(n):
+            curr_v = self.vertices[i]
+            prev_v = self.vertices[(i - 1) % n]
+            next_v = self.vertices[(i + 1) % n]
+            
+            # Vectors to neighbors
+            to_prev = glm.normalize(prev_v - curr_v)
+            to_next = glm.normalize(next_v - curr_v)
+            
+            # Check edge lengths
+            dist_prev = glm.distance(curr_v, prev_v)
+            dist_next = glm.distance(curr_v, next_v)
+            
+            # Limit radius to half the shortest edge to avoid overlap
+            limit = min(dist_prev, dist_next) * 0.45
+            r = min(radius, limit)
+            
+            p1 = curr_v + to_prev * r
+            p2 = curr_v + to_next * r
+            
+            new_verts.append(p1)
+            new_verts.append(p2)
+            
+        return Polygon(new_verts)
+
+    def fillet(self, radius, segments=4):
+        """
+        Rounds the corners of the polygon.
+        radius: Size of the corner cut.
+        segments: Number of segments for the curve.
+        Returns a new Polygon.
+        """
+        if radius <= 0 or segments < 1:
+            return self
+            
+        new_verts = []
+        n = len(self.vertices)
+        
+        for i in range(n):
+            curr_v = self.vertices[i]
+            prev_v = self.vertices[(i - 1) % n]
+            next_v = self.vertices[(i + 1) % n]
+            
+            # Vectors to neighbors
+            to_prev = glm.normalize(prev_v - curr_v)
+            to_next = glm.normalize(next_v - curr_v)
+            
+            # Check edge lengths
+            dist_prev = glm.distance(curr_v, prev_v)
+            dist_next = glm.distance(curr_v, next_v)
+            
+            # Limit radius to half the shortest edge to avoid overlap
+            limit = min(dist_prev, dist_next) * 0.45
+            r = min(radius, limit)
+            
+            p1 = curr_v + to_prev * r
+            p2 = curr_v + to_next * r
+            
+            # Generate curve points (Quadratic Bezier)
+            # Control points: p1, curr_v, p2
+            for s in range(segments):
+                t = s / float(segments) # 0 to almost 1
+                # Quadratic Bezier: B(t) = (1-t)^2 * P0 + 2(1-t)t * P1 + t^2 * P2
+                inv_t = 1.0 - t
+                pt = (inv_t * inv_t) * p1 + 2 * inv_t * t * curr_v + (t * t) * p2
+                new_verts.append(pt)
+            
+            # Add the last point p2 (t=1)
+            new_verts.append(p2)
+            
+        return Polygon(new_verts)
