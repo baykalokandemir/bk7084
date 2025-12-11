@@ -30,6 +30,7 @@ class AdvancedCityGenerator:
         self.roads = [] # List of Shapes (Road segments)
         self.sidewalks = [] # List of Shapes
         self.road_network = None
+        self.street_light_poses = [] # List of glm.mat4
 
     def generate(self):
         self.blocks = []
@@ -38,6 +39,7 @@ class AdvancedCityGenerator:
         self.parks = []
         self.roads = []
         self.sidewalks = []
+        self.street_light_poses = []
         self.road_network = RoadNetwork()
         
         # 1. Carve out Town Square
@@ -93,7 +95,62 @@ class AdvancedCityGenerator:
             self._split_city_recursive(sector, raw_blocks, 1)
         
         # 3. Generate Road Meshes from Network
-        self.roads.extend(self.road_network.generate_meshes())
+        road_meshes, road_edges = self.road_network.generate_meshes()
+        self.roads.extend(road_meshes)
+        
+        # Generator Street Lights from Edges
+        light_spacing = 25.0
+        sidewalk_offset = 0.5 # Distance from curb
+        
+        for edge in road_edges:
+            start = edge['start']
+            end = edge['end']
+            normal = edge['normal']
+            
+            vec = end - start
+            length = glm.length(vec)
+            direction = glm.normalize(vec)
+            
+            # Place lights
+            # Start a bit in
+            curr_dist = light_spacing * 0.5
+            
+            while curr_dist < length:
+                pos = start + direction * curr_dist
+                # Offset onto sidewalk
+                pos += normal * sidewalk_offset
+                
+                # Create Transform
+                # Position
+                mat = glm.translate(pos)
+                
+                # Rotation
+                # Normal points to sidewalk (back of light).
+                # Light should face ROAD (negative normal).
+                # Default light faces +Z? Check StreetLight class.
+                # In StreetLight, arm extends +X.
+                # So +X should point to ROAD (-normal).
+                # Normal is (nx, 0, nz).
+                # We want light's +X to be -normal.
+                # We want light's +Y to be +Y (up).
+                # We want light's +Z to be cross(X, Y) = cross(-normal, up).
+                
+                target_x = -normal
+                target_y = glm.vec3(0, 1, 0)
+                target_z = glm.normalize(glm.cross(target_x, target_y))
+                
+                # Rotation Matrix from basis vectors
+                # mat4 construct from col vectors
+                rot = glm.mat4(
+                    glm.vec4(target_x, 0.0),
+                    glm.vec4(target_y, 0.0),
+                    glm.vec4(target_z, 0.0),
+                    glm.vec4(0, 0, 0, 1.0)
+                )
+                
+                self.street_light_poses.append(mat * rot)
+                
+                curr_dist += light_spacing
         
         # 4. Process Blocks & Sidewalks
         for raw_block in raw_blocks:

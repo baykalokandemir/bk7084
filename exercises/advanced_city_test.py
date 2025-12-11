@@ -11,11 +11,13 @@ from framework.objects import MeshObject
 from framework.materials import Material
 from framework.utils.advanced_city_generator import AdvancedCityGenerator
 from framework.utils.mesh_batcher import MeshBatcher
+from framework.utils.street_light import StreetLight
 from framework.camera import Flycamera
 import glfw
 import glm
 import imgui
 from imgui.integrations.glfw import GlfwRenderer
+import numpy as np
 
 def main():
     window = OpenGLWindow(1280, 720, "Advanced City Generation (Organic & Batched)")
@@ -52,6 +54,7 @@ def main():
     
     # Create Objects using Batching
     city_object = None
+    all_bulb_positions = []
     
     def create_city_objects():
         nonlocal city_object
@@ -75,9 +78,58 @@ def main():
         for shape in generator.roads:
             batcher.add_shape(shape)
             
+            
         # Batch Sidewalks (Gray)
         for shape in generator.sidewalks:
             batcher.add_shape(shape)
+            
+
+        # Batch Street Lights & Add Lights
+        sl_gen = StreetLight()
+        sl_shape = sl_gen.generate_mesh()
+        
+        
+        # Batch Street Lights & Collect Bulb Positions
+        sl_gen = StreetLight()
+        sl_shape = sl_gen.generate_mesh()
+        
+        # Store all bulb positions for dynamic culling
+        nonlocal all_bulb_positions
+        all_bulb_positions = []
+        
+        count_valid = 0
+        for pose in generator.street_light_poses:
+            # Robust Check for NaNs or Infinity in the matrix
+            # pose is a glm.mat4, which behaves like a list of 4 columns (vec4s) or list of list.
+            # We convert to numpy buffer to check easily or just iterate.
+            is_valid = True
+            for col in range(4):
+                for row in range(4):
+                    val = pose[col][row]
+                    import math
+                    if math.isnan(val) or math.isinf(val):
+                        is_valid = False
+                        break
+                if not is_valid: break
+            
+            if not is_valid:
+                continue
+                 
+            batcher.add_shape(sl_shape, transform=pose)
+            
+            # Calculate world position of bulb
+            bulb_local = glm.vec4(sl_gen.bulb_offset, 1.0)
+            bulb_world = pose * bulb_local
+            all_bulb_positions.append(bulb_world)
+            count_valid += 1
+            
+        print(f"Generated {count_valid} valid street lights (filtered from {len(generator.street_light_poses)})")
+            
+        mat = Material()
+            
+        mat = Material()
+        # Reduce specular strength to avoid "shiny lines" on ground
+        mat.specular_strength = 0.1
             
         mat = Material()
         # Use vertex colors
@@ -93,6 +145,39 @@ def main():
     while not glfw.window_should_close(window.window):
         impl.process_inputs()
         camera.update(0.016)
+        
+        # Dynamic Lighting Culling
+        # 1. Always keep the main sun/ambient light (index 0)
+        main_light = glrenderer.lights[0] if len(glrenderer.lights) > 0 else None
+        
+        # 2. Find closest street lights
+        active_lights = [main_light] if main_light else []
+        
+        if len(all_bulb_positions) > 0:
+            cam_pos = camera.position
+            
+            # Helper to get distance squared
+            def dist_sq(pos_vec4):
+                # pos_vec4 is glm.vec4
+                # cam_pos is glm.vec3
+                p = glm.vec3(pos_vec4)
+                d = p - cam_pos
+                return glm.dot(d, d)
+                
+            # Sort all lights by distance
+            # Optimization: If we have thousands, this might differ.
+            # But for ~hundreds it's fine.
+            sorted_bulbs = sorted(all_bulb_positions, key=dist_sq)
+            
+            # Pick closest 8 (leaving room for sun + maybe one more)
+            closest_bulbs = sorted_bulbs[:8]
+            
+            light_col = glm.vec4(1.0, 0.9, 0.7, 1.0)
+            for bulb_pos in closest_bulbs:
+                active_lights.append(PointLight(bulb_pos, light_col))
+                
+        # 3. Update renderer
+        glrenderer.lights = active_lights
         
         glrenderer.render()
         

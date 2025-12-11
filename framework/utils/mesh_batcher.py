@@ -46,7 +46,8 @@ class MeshBatcher:
             # M is (4, 4)
             # V_new = V @ M.T
             
-            m_np = np.array(transform.to_list(), dtype=np.float32).T # Transpose for multiplication
+            # m_np = np.array(transform.to_list(), dtype=np.float32).T # WRONG: glm list is cols, np array cols are rows.
+            m_np = np.array(transform.to_list(), dtype=np.float32)
             v_new = s_verts @ m_np
             
             # Transform normals
@@ -56,7 +57,7 @@ class MeshBatcher:
             # Normal matrix = mat3(transpose(inverse(model)))
             # If we use glm:
             nm = glm.transpose(glm.inverse(transform))
-            nm_np = np.array(nm.to_list(), dtype=np.float32).T
+            nm_np = np.array(nm.to_list(), dtype=np.float32)
             
             # Normals are (N, 3) or (N, 4)? Shape usually stores (N, 3).
             # If (N, 3), we need 3x3 matrix.
