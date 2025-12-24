@@ -224,6 +224,7 @@ class AdvancedCityGenerator:
             i1 = inner.vertices[i]
             i2 = inner.vertices[(i+1)%n]
             
+            # --- TOP FACE ---
             # Quad: o1, o2, i2, i1
             verts.extend([
                 glm.vec4(o1.x, y, o1.y, 1.0),
@@ -234,10 +235,13 @@ class AdvancedCityGenerator:
             norms.extend([glm.vec3(0, 1, 0)] * 4)
             cols.extend([color] * 4)
             
-            base = start_idx + i * 4
+            # Calculate base index for TOP
+            # Each iteration adds 8 vertices total (4 top + 4 curb).
+            # So the start of this iteration's TOP is i * 8.
+            base = start_idx + (i * 8)
             inds.extend([base, base+1, base+2, base, base+2, base+3])
             
-            # Curb (Side face)
+            # --- CURB FACE ---
             # o1 -> o2 down to y=0
             verts.extend([
                 glm.vec4(o1.x, y, o1.y, 1.0),
@@ -245,13 +249,16 @@ class AdvancedCityGenerator:
                 glm.vec4(o2.x, 0, o2.y, 1.0),
                 glm.vec4(o1.x, 0, o1.y, 1.0)
             ])
+            
             # Normal approx
             edge = o2 - o1
             norm = glm.normalize(glm.vec3(-edge.y, 0, edge.x))
             norms.extend([norm] * 4)
             cols.extend([color] * 4)
             
-            base_curb = start_idx + n * 4 + i * 4
+            # Calculate base index for CURB
+            # The curb vertices are added immediately after the 4 top vertices.
+            base_curb = base + 4
             inds.extend([base_curb, base_curb+1, base_curb+2, base_curb, base_curb+2, base_curb+3])
 
         shape.vertices = np.array([v.to_list() for v in verts], dtype=np.float32)
@@ -287,18 +294,6 @@ class AdvancedCityGenerator:
             # Line defined by v1 -> v2
             split_point = v1
             split_dir = glm.normalize(v2 - v1)
-            
-            # Capture Spoke Road (Main Artery)
-            # Find intersection with CURRENT center_poly
-            # Note: center_poly is shrinking, but for the first cut it's root_poly.
-            # Actually, we want the intersection with the ROOT poly (or the current outer boundary).
-            # But center_poly is the one being cut.
-            # The split line is v1->v2.
-            # Intersections with center_poly will be p1, p2.
-            # Since v1, v2 are inside center_poly (before cut), p1 and p2 must be outside v1-v2 segment?
-            # No, v1, v2 are ON the cut line.
-            # p1, p2 are on the boundary of center_poly.
-            # So p1, p2 bracket v1, v2.
             
             intersections = center_poly.intersect_line(split_point, split_dir)
             if len(intersections) >= 2:

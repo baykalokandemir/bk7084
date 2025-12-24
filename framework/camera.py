@@ -320,7 +320,7 @@ class Flycamera (Camera):
 
     def update(self, dt):
         # Frame-independent movement
-        speed = self.step_factor * dt * 20.0 # Adjust speed scaling
+        speed = self.step_factor * dt * 70.0 # Adjust speed scaling
         
         if self.keys.get(glfw.KEY_W):
              self.position += self.front * speed
