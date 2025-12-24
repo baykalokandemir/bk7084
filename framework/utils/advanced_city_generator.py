@@ -30,6 +30,7 @@ class AdvancedCityGenerator:
         self.roads = [] # List of Shapes (Road segments)
         self.sidewalks = [] # List of Shapes
         self.road_network = None
+        self.street_light_poses = [] # List of glm.mat4
 
     def generate(self):
         self.blocks = []
@@ -38,6 +39,7 @@ class AdvancedCityGenerator:
         self.parks = []
         self.roads = []
         self.sidewalks = []
+        self.street_light_poses = []
         self.road_network = RoadNetwork()
         
         # 1. Carve out Town Square
@@ -93,7 +95,62 @@ class AdvancedCityGenerator:
             self._split_city_recursive(sector, raw_blocks, 1)
         
         # 3. Generate Road Meshes from Network
-        self.roads.extend(self.road_network.generate_meshes())
+        road_meshes, road_edges = self.road_network.generate_meshes()
+        self.roads.extend(road_meshes)
+        
+        # Generator Street Lights from Edges
+        light_spacing = 25.0
+        sidewalk_offset = 0.5 # Distance from curb
+        
+        for edge in road_edges:
+            start = edge['start']
+            end = edge['end']
+            normal = edge['normal']
+            
+            vec = end - start
+            length = glm.length(vec)
+            direction = glm.normalize(vec)
+            
+            # Place lights
+            # Start a bit in
+            curr_dist = light_spacing * 0.5
+            
+            while curr_dist < length:
+                pos = start + direction * curr_dist
+                # Offset onto sidewalk
+                pos += normal * sidewalk_offset
+                
+                # Create Transform
+                # Position
+                mat = glm.translate(pos)
+                
+                # Rotation
+                # Normal points to sidewalk (back of light).
+                # Light should face ROAD (negative normal).
+                # Default light faces +Z? Check StreetLight class.
+                # In StreetLight, arm extends +X.
+                # So +X should point to ROAD (-normal).
+                # Normal is (nx, 0, nz).
+                # We want light's +X to be -normal.
+                # We want light's +Y to be +Y (up).
+                # We want light's +Z to be cross(X, Y) = cross(-normal, up).
+                
+                target_x = -normal
+                target_y = glm.vec3(0, 1, 0)
+                target_z = glm.normalize(glm.cross(target_x, target_y))
+                
+                # Rotation Matrix from basis vectors
+                # mat4 construct from col vectors
+                rot = glm.mat4(
+                    glm.vec4(target_x, 0.0),
+                    glm.vec4(target_y, 0.0),
+                    glm.vec4(target_z, 0.0),
+                    glm.vec4(0, 0, 0, 1.0)
+                )
+                
+                self.street_light_poses.append(mat * rot)
+                
+                curr_dist += light_spacing
         
         # 4. Process Blocks & Sidewalks
         for raw_block in raw_blocks:
@@ -167,6 +224,7 @@ class AdvancedCityGenerator:
             i1 = inner.vertices[i]
             i2 = inner.vertices[(i+1)%n]
             
+            # --- TOP FACE ---
             # Quad: o1, o2, i2, i1
             verts.extend([
                 glm.vec4(o1.x, y, o1.y, 1.0),
@@ -177,10 +235,13 @@ class AdvancedCityGenerator:
             norms.extend([glm.vec3(0, 1, 0)] * 4)
             cols.extend([color] * 4)
             
-            base = start_idx + i * 4
+            # Calculate base index for TOP
+            # Each iteration adds 8 vertices total (4 top + 4 curb).
+            # So the start of this iteration's TOP is i * 8.
+            base = start_idx + (i * 8)
             inds.extend([base, base+1, base+2, base, base+2, base+3])
             
-            # Curb (Side face)
+            # --- CURB FACE ---
             # o1 -> o2 down to y=0
             verts.extend([
                 glm.vec4(o1.x, y, o1.y, 1.0),
@@ -188,13 +249,16 @@ class AdvancedCityGenerator:
                 glm.vec4(o2.x, 0, o2.y, 1.0),
                 glm.vec4(o1.x, 0, o1.y, 1.0)
             ])
+            
             # Normal approx
             edge = o2 - o1
             norm = glm.normalize(glm.vec3(-edge.y, 0, edge.x))
             norms.extend([norm] * 4)
             cols.extend([color] * 4)
             
-            base_curb = start_idx + n * 4 + i * 4
+            # Calculate base index for CURB
+            # The curb vertices are added immediately after the 4 top vertices.
+            base_curb = base + 4
             inds.extend([base_curb, base_curb+1, base_curb+2, base_curb, base_curb+2, base_curb+3])
 
         shape.vertices = np.array([v.to_list() for v in verts], dtype=np.float32)
@@ -230,18 +294,6 @@ class AdvancedCityGenerator:
             # Line defined by v1 -> v2
             split_point = v1
             split_dir = glm.normalize(v2 - v1)
-            
-            # Capture Spoke Road (Main Artery)
-            # Find intersection with CURRENT center_poly
-            # Note: center_poly is shrinking, but for the first cut it's root_poly.
-            # Actually, we want the intersection with the ROOT poly (or the current outer boundary).
-            # But center_poly is the one being cut.
-            # The split line is v1->v2.
-            # Intersections with center_poly will be p1, p2.
-            # Since v1, v2 are inside center_poly (before cut), p1 and p2 must be outside v1-v2 segment?
-            # No, v1, v2 are ON the cut line.
-            # p1, p2 are on the boundary of center_poly.
-            # So p1, p2 bracket v1, v2.
             
             intersections = center_poly.intersect_line(split_point, split_dir)
             if len(intersections) >= 2:

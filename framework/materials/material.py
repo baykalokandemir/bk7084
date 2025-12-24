@@ -97,6 +97,10 @@ class Material:
                     gl.glUniform1f(loc, value)
                 elif isinstance(value, int):
                     gl.glUniform1i(loc, value)
+                elif isinstance(value, bool):
+                    gl.glUniform1i(loc, int(value))
+                elif isinstance(value, glm.vec2):
+                    gl.glUniform2fv(loc, 1, glm.value_ptr(value))
                 elif isinstance(value, glm.vec3):
                     gl.glUniform3fv(loc, 1, glm.value_ptr(value))
                 elif isinstance(value, glm.vec4):

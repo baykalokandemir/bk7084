@@ -197,6 +197,7 @@ class RoadNetwork:
     def generate_meshes(self):
         road_shapes = []
         intersection_shapes = []
+        road_edges = []
         
         # 1. Compute Intersection Geometry
         # segment_corners = { (p1_t, p2_t): {'p1': (left, right), 'p2': (left, right)} }
@@ -394,4 +395,25 @@ class RoadNetwork:
             shape.indices = np.array(inds, dtype=np.uint32)
             road_shapes.append(shape)
             
-        return road_shapes + intersection_shapes
+            # Record Edges for Street Lights
+            # Edge 1: P1_Right -> P2_Left
+            edge1_dir = p2_left - p1_right
+            if glm.length(edge1_dir) > 0.1:
+                edge1_norm = glm.normalize(glm.vec2(edge1_dir.y, -edge1_dir.x))
+                road_edges.append({
+                    'start': glm.vec3(p1_right.x, y, p1_right.y),
+                    'end': glm.vec3(p2_left.x, y, p2_left.y),
+                    'normal': glm.vec3(edge1_norm.x, 0, edge1_norm.y)
+                })
+
+            # Edge 2: P2_Right -> P1_Left
+            edge2_dir = p1_left - p2_right
+            if glm.length(edge2_dir) > 0.1:
+                edge2_norm = glm.normalize(glm.vec2(edge2_dir.y, -edge2_dir.x))
+                road_edges.append({
+                    'start': glm.vec3(p2_right.x, y, p2_right.y),
+                    'end': glm.vec3(p1_left.x, y, p1_left.y),
+                    'normal': glm.vec3(edge2_norm.x, 0, edge2_norm.y)
+                })
+            
+        return road_shapes + intersection_shapes, road_edges
