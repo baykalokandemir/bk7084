@@ -18,7 +18,10 @@ class Config:
     POINT_SHAPE = 0 # 0: Circle, 1: Square
     POINT_SHAPES = ["Circle", "Square"]
     ANIM_RESIZE_X = False
+    ANIM_RESIZE_X = False
     ANIM_RESIZE_Y = False
+    USE_ABERRATION = False
+    ABERRATION_STRENGTH = 0.005
     ROTATE = False
     SAMPLING_MODE = 1 # 0: random, 1: poisson, 2: regular
     SAMPLING_MODES = ['random', 'poisson', 'regular']
@@ -45,7 +48,7 @@ class Config:
     USE_POINT_CLOUD = True
 
 def main():
-    width, height = 800, 600
+    width, height = 1920, 1080
     glwindow = OpenGLWindow(width, height)
     
     camera = Flycamera(width, height, 70.0, 0.1, 100.0)
@@ -55,10 +58,19 @@ def main():
     
     glrenderer = GLRenderer(glwindow, camera)
     glrenderer.clear_color = [0.05, 0.05, 0.1, 1.0] # Dark blue background
+    glrenderer.init_post_process(width, height)
     
     # ImGui Initialization
     imgui.create_context()
     impl = GlfwRenderer(glwindow.window, attach_callbacks=False)
+
+    # Framebuffer Resize Callback
+    def framebuffer_size_callback(window, width, height):
+        gl.glViewport(0, 0, width, height)
+        glrenderer.resize_post_process(width, height)
+        camera.window_size_callback(width, height)
+        
+    glfw.set_framebuffer_size_callback(glwindow.window, framebuffer_size_callback)
     
     # Overwrite callbacks with our wrappers that call ImGui's handler AND our handler
     def key_callback_wrapper(window, key, scancode, action, mods):
@@ -112,6 +124,10 @@ def main():
         
         # Update Scene Uniforms
         scene_manager.update_uniforms(config, dt)
+        
+        # Update Post-Process Uniforms
+        glrenderer.use_post_process = config.USE_ABERRATION
+        glrenderer.aberration_strength = config.ABERRATION_STRENGTH
         
         # Update camera
         camera.update(dt)

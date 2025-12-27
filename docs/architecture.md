@@ -90,7 +90,16 @@ The engine uses three unique shader techniques to achieve its style:
 * **Goal:** Render 2D screens/billboards.
 * **Technique:**
     * Converts input texture to grayscale luminance.
+    * Converts input texture to grayscale luminance.
     * Overlays procedural vertical strips and animated horizontal scanlines.
+
+### D. Post-Processing Pipeline
+
+*   **Goal:** Apply full-screen effects after the 3D scene is rendered.
+*   **Technique:**
+    *   **Framebuffer Object (FBO):** The scene is rendered to an off-screen texture instead of the screen.
+    *   **Render-to-Quad:** A full-screen quad is drawn with the scene texture.
+    *   **Chromatic Aberration:** The fragment shader samples the Red, Green, and Blue channels at slightly different texture coordinates (offset by `aberration_strength`) to simulate lens dispersion.
 
 ---
 

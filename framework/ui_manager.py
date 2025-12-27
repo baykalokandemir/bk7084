@@ -106,6 +106,16 @@ class UIManager:
             if changed_color_slice:
                 h, s, v = colorsys.rgb_to_hsv(*config.SLICE_COLOR)
                 config.SLICE_HUE = h
+            changed_color_slice, config.SLICE_COLOR = imgui.color_edit3("Slice Color", *config.SLICE_COLOR)
+            if changed_color_slice:
+                h, s, v = colorsys.rgb_to_hsv(*config.SLICE_COLOR)
+                config.SLICE_HUE = h
+                
+        # Post Processing
+        if imgui.collapsing_header("Post Processing", visible=True)[0]:
+            _, config.USE_ABERRATION = imgui.checkbox("Enable Chromatic Aberration", config.USE_ABERRATION)
+            if config.USE_ABERRATION:
+                _, config.ABERRATION_STRENGTH = imgui.slider_float("Strength", config.ABERRATION_STRENGTH, 0.0, 0.05, "%.4f")
             
         imgui.end()
         
