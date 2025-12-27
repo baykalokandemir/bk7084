@@ -115,7 +115,11 @@ class UIManager:
         if imgui.collapsing_header("Post Processing", visible=True)[0]:
             _, config.USE_ABERRATION = imgui.checkbox("Enable Chromatic Aberration", config.USE_ABERRATION)
             if config.USE_ABERRATION:
-                _, config.ABERRATION_STRENGTH = imgui.slider_float("Strength", config.ABERRATION_STRENGTH, 0.0, 0.05, "%.4f")
+                _, config.ABERRATION_STRENGTH = imgui.slider_float("Aberration Strength", config.ABERRATION_STRENGTH, 0.0, 0.05, "%.4f")
+            
+            _, config.USE_BLUR = imgui.checkbox("Enable Blur", config.USE_BLUR)
+            if config.USE_BLUR:
+                _, config.BLUR_STRENGTH = imgui.slider_float("Blur Strength", config.BLUR_STRENGTH, 0.0001, 0.01, "%.4f")
             
         imgui.end()
         

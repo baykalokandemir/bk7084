@@ -79,6 +79,7 @@ class GLRenderer ():
         )
         self.use_post_process = False
         self.aberration_strength = 0.005
+        self.blur_strength = 0.0
         
         # 5. Screen Quad VAO
         self.setup_quad()
@@ -155,6 +156,7 @@ class GLRenderer ():
             gl.glUseProgram(self.post_shader)
             gl.glUniform1i(gl.glGetUniformLocation(self.post_shader, "screenTexture"), 0)
             gl.glUniform1f(gl.glGetUniformLocation(self.post_shader, "aberration_strength"), self.aberration_strength)
+            gl.glUniform1f(gl.glGetUniformLocation(self.post_shader, "blur_strength"), self.blur_strength)
             
             gl.glBindVertexArray(self.quadVAO)
             gl.glBindTexture(gl.GL_TEXTURE_2D, self.texture_color_buffer)

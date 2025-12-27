@@ -9,7 +9,7 @@ A static class acting as a central state store. It holds all the tweakable param
 - **Generation:** Point Count, Sampling Mode.
 - **Point Settings:** Base Size, Shape (Circle/Square).
 - **Animation:** Resize Horizontal/Vertical (Pulsing effect).
-- **Post-Processing:** Chromatic Aberration (Toggle & Strength).
+- **Post-Processing:** Chromatic Aberration, Blur.
 - **Visuals:** Colors, Glow Strength.
 
 ### 2. Input Handling (Callback Wrappers)

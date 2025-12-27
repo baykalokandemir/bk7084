@@ -23,3 +23,12 @@ Simulates a lens failing to focus all colors to the same point.
     *   **Green Channel:** Sampled at `uv` (center).
     *   **Blue Channel:** Sampled at `uv - direction * strength`.
     *   This creates a radial color split that increases towards the edges of the screen.
+
+### 2. Blur
+A simple adjustable blur effect.
+*   **Uniforms:**
+    *   `float blur_strength`: Controls the radius of the blur sample kernel.
+*   **Logic:**
+    *   Implements a 9-tap Box Blur (samples a 3x3 grid around the pixel).
+    *   The distance between samples is scaled by `blur_strength`.
+    *   If combined with Chromatic Aberration, the aberration offset is applied to each sample.

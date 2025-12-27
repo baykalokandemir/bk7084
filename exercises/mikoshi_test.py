@@ -22,6 +22,8 @@ class Config:
     ANIM_RESIZE_Y = False
     USE_ABERRATION = False
     ABERRATION_STRENGTH = 0.005
+    USE_BLUR = False
+    BLUR_STRENGTH = 0.002
     ROTATE = False
     SAMPLING_MODE = 1 # 0: random, 1: poisson, 2: regular
     SAMPLING_MODES = ['random', 'poisson', 'regular']
@@ -126,8 +128,9 @@ def main():
         scene_manager.update_uniforms(config, dt)
         
         # Update Post-Process Uniforms
-        glrenderer.use_post_process = config.USE_ABERRATION
-        glrenderer.aberration_strength = config.ABERRATION_STRENGTH
+        glrenderer.use_post_process = config.USE_ABERRATION or config.USE_BLUR
+        glrenderer.aberration_strength = config.ABERRATION_STRENGTH if config.USE_ABERRATION else 0.0
+        glrenderer.blur_strength = config.BLUR_STRENGTH if config.USE_BLUR else 0.0
         
         # Update camera
         camera.update(dt)
