@@ -23,6 +23,18 @@ class UIManager:
             changed_scale, config.GLTF_SCALE = imgui.slider_float("GLTF Scale", config.GLTF_SCALE, 0.01, 1.0)
             
             changed_cloud, config.USE_POINT_CLOUD = imgui.checkbox("Use Point Cloud", config.USE_POINT_CLOUD)
+
+            imgui.separator()
+            imgui.text("Point Settings")
+            _, config.POINT_SIZE = imgui.slider_float("Point Size", config.POINT_SIZE, 1.0, 50.0)
+            
+            clicked_shape, current_shape = imgui.combo("Point Shape", config.POINT_SHAPE, config.POINT_SHAPES)
+            if clicked_shape:
+                config.POINT_SHAPE = current_shape
+                
+            imgui.text("Animation")
+            _, config.ANIM_RESIZE_X = imgui.checkbox("Resize Horizontal", config.ANIM_RESIZE_X)
+            _, config.ANIM_RESIZE_Y = imgui.checkbox("Resize Vertical", config.ANIM_RESIZE_Y)
             
             imgui.separator()
             imgui.text("Model Loading")

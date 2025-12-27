@@ -2,11 +2,13 @@
 
 in float dist_to_cam;
 in float v_density;
+flat in vec2 v_scale_ratios;
 
 out vec4 out_color;
 
 uniform bool enable_glow;
 uniform bool is_point_mode;
+uniform int shape_type;
 uniform vec3 base_color;
 
 // Mikoshi Palette
@@ -29,9 +31,22 @@ void main()
     
     // Let's add `uniform bool is_point_mode;`
     if (is_point_mode) {
-        vec2 circCoord = 2.0 * gl_PointCoord - 1.0;
-        if (dot(circCoord, circCoord) > 1.0) {
-            discard;
+        vec2 center_coord = gl_PointCoord - 0.5;
+        
+        // shape_type: 0 = Circle, 1 = Square
+        if (shape_type == 0) {
+            // Ellipse logic: normalize coord by scale ratios
+            vec2 adjusted = center_coord / v_scale_ratios;
+            // Check radius (0.5 is edge)
+            if (length(adjusted) > 0.5) {
+                discard;
+            }
+        } else {
+            // Rectangle logic
+            // Check if outside bounds defined by scale ratios
+            if (abs(center_coord.x) > 0.5 * v_scale_ratios.x || abs(center_coord.y) > 0.5 * v_scale_ratios.y) {
+                discard;
+            }
         }
     }
 

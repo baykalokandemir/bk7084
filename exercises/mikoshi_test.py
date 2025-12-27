@@ -14,6 +14,11 @@ from imgui.integrations.glfw import GlfwRenderer
 # Configuration Class
 class Config:
     POINT_COUNT = 500
+    POINT_SIZE = 10.0
+    POINT_SHAPE = 0 # 0: Circle, 1: Square
+    POINT_SHAPES = ["Circle", "Square"]
+    ANIM_RESIZE_X = False
+    ANIM_RESIZE_Y = False
     ROTATE = False
     SAMPLING_MODE = 1 # 0: random, 1: poisson, 2: regular
     SAMPLING_MODES = ['random', 'poisson', 'regular']
