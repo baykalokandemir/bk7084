@@ -75,8 +75,8 @@ The engine uses three unique shader techniques to achieve its style:
 
 * **Goal:** Render geometry as a cloud of glowing data points.
 * **Technique:**
-    * **Vertex Shader:** Sets `gl_PointSize` based on distance (perspective). Passes `Density` (from UV.x).
-    * **Fragment Shader:** Renders circular points. Uses density to mix between Cyan (base) and White/Magenta (hotspots).
+    * **Vertex Shader:** Sets `gl_PointSize` based on distance (perspective), and **Animated Pulse**. Passes `Density` (from UV.x) and `ScaleRatios` for shape cropping.
+    * **Fragment Shader:** Renders circular or square points. Uses density to mix between Cyan (base) and White/Magenta (hotspots). Supports **Custom Shapes** (Circle/Square) via discard logic.
 
 ### B. The Slice Effect (`slice_shader`)
 

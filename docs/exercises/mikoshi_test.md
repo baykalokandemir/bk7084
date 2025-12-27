@@ -5,7 +5,11 @@ The executable entry point for the "Mikoshi" Point Cloud Demo. It functions as t
 
 ## Key Logic
 ### 1. Configuration State (`Config`)
-A static class acting as a central state store. It holds all the tweakable parameters (point count, slice thickness, glow toggle) that are modified by the UI and read by the Scene Manager.
+A static class acting as a central state store. It holds all the tweakable parameters:
+- **Generation:** Point Count, Sampling Mode.
+- **Point Settings:** Base Size, Shape (Circle/Square).
+- **Animation:** Resize Horizontal/Vertical (Pulsing effect).
+- **Visuals:** Colors, Glow Strength.
 
 ### 2. Input Handling (Callback Wrappers)
 * **Problem:** We need to click buttons on the UI without moving the 3D camera.
