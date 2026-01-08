@@ -342,13 +342,12 @@ class AdvancedCityGenerator:
                     p1 = intersections[0]
                     p2 = intersections[1]
                     
-                    # Determine width/lanes based on depth
-                    if depth == 0:
-                        w, l = 20.0, 6
-                    elif depth == 1:
-                        w, l = 14.0, 4
-                    else:
-                        w, l = 8.0, 2
+                    p1 = intersections[0]
+                    p2 = intersections[1]
+                    
+                    # UNIFORM ROAD NETWORK (Width 8.0, 2 Lanes)
+                    # No more depth-based hierarchy
+                    w, l = 8.0, 2
                         
                     self.road_network.add_segment(p1, p2, w, l)
 
