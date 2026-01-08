@@ -75,11 +75,16 @@ def main():
         city_gen.generate_grid(rows=10, cols=10, spacing=40.0) 
         print(f"Nodes: {len(city_gen.graph.nodes)}, Edges: {len(city_gen.graph.edges)}")
         
-        # 2. Generate Geometry
+        # 2. Naturalization (The Fix for Monotony)
+        print("Naturalizing City...")
+        city_gen.apply_irregularity(distortion=15.0, cull_chance=0.2)
+        print(f"Nodes (Post-Cull): {len(city_gen.graph.nodes)}, Edges (Post-Cull): {len(city_gen.graph.edges)}")
+        
+        # 3. Generate Geometry
         print("Generating Mesh...")
         meshes = mesh_gen.generate(city_gen.graph)
         
-        # 3. Batching (The Fix for Freezing)
+        # 4. Batching (The Fix for Freezing)
         print("Batching...")
         batcher = MeshBatcher()
         for shape in meshes:

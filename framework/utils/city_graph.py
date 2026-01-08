@@ -21,6 +21,10 @@ class Node:
         if edge not in self.edges:
             self.edges.append(edge)
 
+    def remove_edge(self, edge):
+        if edge in self.edges:
+            self.edges.remove(edge)
+
     def __repr__(self):
         return f"Node(id={self.id}, x={self.x:.2f}, y={self.y:.2f})"
 
@@ -72,6 +76,12 @@ class CityGraph:
         edge = Edge(node_a, node_b, width, lanes)
         self.edges.append(edge)
         return edge
+
+    def remove_edge(self, edge):
+        if edge in self.edges:
+            self.edges.remove(edge)
+            edge.start_node.remove_edge(edge)
+            edge.end_node.remove_edge(edge)
 
     def clear(self):
         self.nodes = []
