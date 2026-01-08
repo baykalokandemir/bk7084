@@ -185,14 +185,66 @@ def main():
         imgui.new_frame()
         imgui.begin("Controls")
         if imgui.button("Regenerate"):
-            # Clear old objects
+            # 1. Clear old objects
             if city_object and city_object in glrenderer.objects:
                 glrenderer.objects.remove(city_object)
             
+            # 2. Run Generation
             generator.generate()
+            
+            # 3. DEBUG: Print Road Network Graph
+            print("\n" + "="*40)
+            print(" ROAD NETWORK GRAPH DUMP")
+            print("="*40)
+            
+            # Try to grab the network
+            rn = getattr(generator, 'graph', None) or getattr(generator, 'road_network', None)
+            
+            if rn:
+                # Grab segments
+                segments = getattr(rn, 'edges', []) or getattr(rn, 'segments', [])
+                print(f"Total Segments: {len(segments)}")
+                
+                for i, seg in enumerate(segments):
+                    p1, p2, w = None, None, 0
+                    
+                    # CASE 1: Tuple (The one used in road_network.py)
+                    # Format: (p1_vec, p2_vec, width, lanes)
+                    if isinstance(seg, tuple) and len(seg) >= 3:
+                        p1 = seg[0]
+                        p2 = seg[1]
+                        w  = seg[2]
+
+                    # CASE 2: Dictionary
+                    elif isinstance(seg, dict):
+                        p1 = seg.get('start')
+                        p2 = seg.get('end')
+                        w  = seg.get('width', 0)
+                    
+                    # CASE 3: Object (CityGraph)
+                    else:
+                        n1 = getattr(seg, 'start_node', None) or getattr(seg, 'start', None)
+                        n2 = getattr(seg, 'end_node', None)   or getattr(seg, 'end', None)
+                        if n1: p1 = getattr(n1, 'position', n1)
+                        if n2: p2 = getattr(n2, 'position', n2)
+                        w = getattr(seg, 'width', 0)
+
+                    # Formatter
+                    def fmt(v):
+                        if v is None: return "None"
+                        # Handle glm.vec2 or vec3
+                        x = getattr(v, 'x', v[0] if isinstance(v, (list, tuple)) else 0)
+                        y = getattr(v, 'y', v[1] if isinstance(v, (list, tuple)) else 0)
+                        return f"({x:>6.1f}, {y:>6.1f})"
+
+                    print(f"  Edge {i:03}: {fmt(p1)} --> {fmt(p2)} | Width: {w}")
+            else:
+                print("Error: Generator has no graph/road_network.")
+            print("="*40 + "\n")
+
+            # 4. Build Meshes & Batch
             create_city_objects()
             print(f"Regenerated: {len(generator.blocks)} blocks, {len(generator.lots)} lots.")
-            
         imgui.end()
         imgui.render()
         impl.render(imgui.get_draw_data())

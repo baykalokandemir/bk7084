@@ -9,6 +9,7 @@ from framework.renderer import GLRenderer
 from framework.objects import MeshObject
 from framework.materials import Material
 from framework.utils.city_generator import CityGenerator
+from framework.utils.advanced_city_generator import AdvancedCityGenerator
 from framework.utils.mesh_generator import MeshGenerator
 from framework.utils.mesh_batcher import MeshBatcher
 from framework.camera import Flycamera
@@ -23,14 +24,14 @@ from imgui.integrations.glfw import GlfwRenderer
 def main():
     # Robust Window Init
     try:
-        window = OpenGLWindow(1280, 720, "Graph City Test")
+        window = OpenGLWindow(1280, 720, "Graph City Test - Hybrid Mode")
     except Exception as e:
         print(f"Failed to create window: {e}")
         return
 
     # Camera setup
     camera = Flycamera(window.width, window.height, 70, 0.1, 1000.0)
-    camera.position = glm.vec3(0, 100, 100)
+    camera.position = glm.vec3(0, 150, 150)
     camera.euler_angles.x = -60
     
     glrenderer = GLRenderer(window, camera)
@@ -58,46 +59,91 @@ def main():
     city_gen = CityGenerator()
     mesh_gen = MeshGenerator()
     
-    # Store objects to remove them later
+    # Toggle State
+    show_buildings = [False] 
+    
+    # Store explicit references
     current_objects = []
+    city_mesh_obj = None
+    building_mesh_obj = None
+    debug_mesh_obj = None
 
     def regenerate():
-        nonlocal current_objects
+        nonlocal current_objects, city_mesh_obj, building_mesh_obj, debug_mesh_obj
         
         # Clear old objects
         for obj in current_objects:
             if obj in glrenderer.objects:
                 glrenderer.objects.remove(obj)
         current_objects = []
+        city_mesh_obj = None
+        building_mesh_obj = None
+        debug_mesh_obj = None
         
-        # 1. Generate Grid (Deterministic)
-        print("Generating Grid...")
-        city_gen.generate_grid(rows=10, cols=10, spacing=40.0) 
-        print(f"Nodes: {len(city_gen.graph.nodes)}, Edges: {len(city_gen.graph.edges)}")
+        # 1. Generate BSP Layout (Visuals + Layout)
+        print("Generating BSP Layout...")
+        adv_gen = AdvancedCityGenerator(width=400, depth=400)
+        adv_gen.generate()
         
-        # 2. Naturalization (The Fix for Monotony)
-        print("Naturalizing City...")
-        city_gen.apply_irregularity(distortion=15.0, cull_chance=0.2)
-        print(f"Nodes (Post-Cull): {len(city_gen.graph.nodes)}, Edges (Post-Cull): {len(city_gen.graph.edges)}")
+        # 2. Build Traffic Graph (Logic Only)
+        print("Building Traffic Graph...")
+        city_gen.build_graph_from_layout(adv_gen)
         
-        # 3. Generate Geometry
-        print("Generating Mesh...")
-        meshes = mesh_gen.generate(city_gen.graph)
+        # 3. Batch Visuals (ALL from BSP)
+        print("Batching Visuals (BSP)...")
         
-        # 4. Batching (The Fix for Freezing)
-        print("Batching...")
-        batcher = MeshBatcher()
-        for shape in meshes:
-            batcher.add_shape(shape)
+        # Batch 1: Infrastructure (Roads, Sidewalks, Parks)
+        batcher_infra = MeshBatcher()
+        for shape in adv_gen.roads:
+            batcher_infra.add_shape(shape)
+        for shape in adv_gen.sidewalks:
+            batcher_infra.add_shape(shape)
+        # Don't forget the parks if you want them!
+        for shape in getattr(adv_gen, 'parks', []):
+             # Make parks green
+             import random # simplified color for now
+             batcher_infra.add_shape(shape) 
             
-        # Build one unified mesh
-        city_mesh = batcher.build(Material())
+        city_mesh_obj = batcher_infra.build(Material())
+        if city_mesh_obj:
+            glrenderer.addObject(city_mesh_obj)
+            current_objects.append(city_mesh_obj)
+
+        # Batch 2: Buildings (FROM BSP)
+        print("Batching Buildings (BSP)...")
+        batcher_bldg = MeshBatcher()
         
-        if city_mesh:
-            glrenderer.addObject(city_mesh)
-            current_objects.append(city_mesh)
+        # Use adv_gen.buildings instead of city_gen.buildings
+        for shape in adv_gen.buildings:
+             # BSP buildings usually have colors baked in or need random assignment
+             # If shape.colors is empty, the batcher might complain or render black.
+             # AdvancedCityGenerator usually handles this.
+            batcher_bldg.add_shape(shape)
+            
+        building_mesh_obj = batcher_bldg.build(Material())
+        if building_mesh_obj:
+            current_objects.append(building_mesh_obj)
+            if show_buildings[0]:
+                glrenderer.addObject(building_mesh_obj)
+            
+        # 4. Generate Debug Traffic Lines (Graph)
+        print("Generating Traffic Debug...")
+        # Use the tuned values we discussed (width * 0.15)
+        debug_shape = mesh_gen.generate_traffic_debug(city_gen.graph)
         
-        print("Done.")
+        if len(debug_shape.vertices) > 0:
+            # High visibility material (Unlit / High Ambient)
+            debug_mat = Material()
+            debug_mat.ambient_strength = 1.0 # Max brightness regardless of light angle
+            debug_mat.diffuse_strength = 0.0 # Ignore directional shading
+            debug_mat.specular_strength = 0.0
+            
+            debug_mesh_obj = MeshObject(debug_shape, debug_mat)
+            debug_mesh_obj.draw_mode = gl.GL_LINES 
+            glrenderer.addObject(debug_mesh_obj)
+            current_objects.append(debug_mesh_obj)
+        
+        print(f"Done. Nodes: {len(city_gen.graph.nodes)}, Edges: {len(city_gen.graph.edges)}")
             
     # Initial Gen
     regenerate()
@@ -106,6 +152,14 @@ def main():
     while not glfw.window_should_close(window.window):
         impl.process_inputs()
         camera.update(0.016)
+        
+        # Handle Toggle Logic (State Sync)
+        if building_mesh_obj:
+            is_in_renderer = building_mesh_obj in glrenderer.objects
+            if show_buildings[0] and not is_in_renderer:
+                glrenderer.addObject(building_mesh_obj)
+            elif not show_buildings[0] and is_in_renderer:
+                glrenderer.objects.remove(building_mesh_obj)
         
         glrenderer.render()
         
@@ -116,8 +170,12 @@ def main():
         if imgui.button("Regenerate"):
             regenerate()
             
+        _, show_buildings[0] = imgui.checkbox("Show Buildings", show_buildings[0])
+            
         imgui.text(f"Nodes: {len(city_gen.graph.nodes)}")
         imgui.text(f"Edges: {len(city_gen.graph.edges)}")
+        imgui.text("Green = Forward Lane")
+        imgui.text("Red = Backward Lane")
             
         imgui.end()
         imgui.render()

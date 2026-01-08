@@ -1,193 +1,153 @@
 import math
 import random
 from framework.utils.city_graph import CityGraph, Node, Edge
-
-class Turtle:
-    def __init__(self, x, y, angle):
-        self.x = x
-        self.y = y
-        self.angle = angle # in radians
-        self.active = True
-
-    def move(self, distance):
-        self.x += math.cos(self.angle) * distance
-        self.y += math.sin(self.angle) * distance
+from framework.utils.polygon import Polygon
+from framework.utils.building import Building
+from pyglm import glm
 
 class CityGenerator:
+    """
+    Traffic Graph Builder.
+    Converts a spatial layout (BSP) into a Node/Edge graph for traffic simulation.
+    Also handles zoning/building placement along the graph edges.
+    """
     def __init__(self):
         self.graph = CityGraph()
-        self.turtles = []
-        self.params = {
-            'step_size': 20.0,
-            'snap_dist': 10.0,
-            'branch_prob': 0.2,
-            'max_steps': 100,
-            'road_width': 10.0
-        }
+        self.buildings = []
 
-    # Deterministic Grid Generator (USE THIS ONE)
-    def generate_grid(self, rows=10, cols=10, spacing=40.0):
-        self.graph.clear()
-        
-        # 1. Create a dictionary to store nodes by grid coordinate (r, c)
-        grid_nodes = {}
-
-        # 2. Create Nodes
-        for r in range(rows):
-            for c in range(cols):
-                # Center the grid around (0,0)
-                x = (c - cols / 2) * spacing
-                y = (r - rows / 2) * spacing
-                
-                node = self.graph.add_node(x, y)
-                grid_nodes[(r, c)] = node
-
-        # 3. Create Edges (Horizontal and Vertical only)
-        for r in range(rows):
-            for c in range(cols):
-                curr_node = grid_nodes[(r, c)]
-                
-                # Connect to Right Neighbor
-                if c < cols - 1:
-                    right_node = grid_nodes[(r, c+1)]
-                    self.graph.add_edge(curr_node, right_node, width=10.0)
-                
-                # Connect to Top Neighbor
-                if r < rows - 1:
-                    top_node = grid_nodes[(r+1, c)]
-                    self.graph.add_edge(curr_node, top_node, width=10.0)
-
-    def apply_irregularity(self, distortion=15.0, cull_chance=0.2):
+    def build_graph_from_layout(self, layout_generator):
         """
-        Applies a 'Naturalization' texturing to the grid.
-        1. Perturbation: Jitters node positions.
-        2. Culling: Randomly removes edges to break grid uniformity.
+        Ingests the road network from a layout generator (e.g., AdvancedCityGenerator).
         """
-        # Step A: Perturbation (Jitter)
-        for node in self.graph.nodes:
-            # Jitter
-            dx = random.uniform(-distortion, distortion)
-            dy = random.uniform(-distortion, distortion)
-            node.x += dx
-            node.y += dy
-            
-        # Step B: Culling (The Eraser)
-        # Iterate over a copy of edges because we might remove them
-        edges_to_check = list(self.graph.edges)
-        
-        for edge in edges_to_check:
-            if random.random() < cull_chance:
-                # Optional Safety: Don't orphan nodes?
-                # If we remove this edge, do the nodes have other edges?
-                start_conns = len(edge.start_node.edges)
-                end_conns = len(edge.end_node.edges)
-                
-                # Check if this edge is the LAST link for either node (orphaned)
-                # Note: node.edges currently includes THIS edge.
-                # So if len == 1, removing it makes it 0.
-                if start_conns <= 1 or end_conns <= 1:
-                    continue # Skip removing this edge to prevent orphans
-                
-                self.graph.remove_edge(edge)
-
-    # Legacy / Experimental Turtle Generator
-    def generate(self):
         self.graph.clear()
-        # Start with one turtle at 0,0
-        start_node = self.graph.add_node(0, 0)
-        self.turtles = [Turtle(0, 0, 0)] # Moving East
-        
-        steps = 0
-        while self.turtles and steps < self.params['max_steps']:
-            steps += 1
-            new_turtles = []
-            
-            for turtle in self.turtles:
-                if not turtle.active: continue
-                
-                # Move
-                turtle.move(self.params['step_size'])
-                
-                # Snap Logic
-                target_node, dist = self.graph.get_nearest_node(turtle.x, turtle.y, self.params['snap_dist'])
-                
-                if target_node:
-                    # Snap to it
-                    turtle.x = target_node.x
-                    turtle.y = target_node.y
-                    turtle.active = False 
+        rn = layout_generator.road_network
+        raw_segments = getattr(rn, 'segments', [])
+
+        print(f"DEBUG: Processing {len(raw_segments)} raw segments from layout...")
+
+        # Spatial Hash: Key = (round(x,1), round(y,1)) -> Val = Node Object
+        node_map = {} 
+        edges_created = 0
+
+        for i, seg in enumerate(raw_segments):
+            # STRICT UNPACKING for (p1, p2, width, lanes)
+            if isinstance(seg, tuple) and len(seg) >= 2:
+                # Assuming (p1, p2, width, lanes) or (p1, p2, width)
+                p1_raw = seg[0]
+                p2_raw = seg[1]
+                width = seg[2] if len(seg) > 2 else 10.0
+            else:
+                if isinstance(seg, dict):
+                     p1_raw = seg.get('start')
+                     p2_raw = seg.get('end')
+                     width = seg.get('width', 10.0)
                 else:
-                    # Create new node
-                    target_node = self.graph.add_node(turtle.x, turtle.y)
-                
-                pass 
+                    continue
 
-            pass
-        
-        pass
+            if p1_raw is None or p2_raw is None:
+                continue
 
-    def generate_improved(self, num_iterations=50):
-        self.graph.clear()
-        
-        # Initial Node
-        start_node = self.graph.add_node(0, 0)
-        
-        # Initial Turtles: Let's spawn 4 directions for a town center
-        self.turtles = [
-            Turtle(0, 0, 0),
-            Turtle(0, 0, math.pi/2),
-            Turtle(0, 0, math.pi),
-            Turtle(0, 0, -math.pi/2)
-        ]
-        
-        # Associate turtles with the start node
-        for t in self.turtles:
-            t.current_node = start_node
+            # Convert to simple (x, y) tuples for safety
+            v1_x = float(getattr(p1_raw, 'x', p1_raw[0]))
+            v1_y = float(getattr(p1_raw, 'y', p1_raw[1]))
+            v2_x = float(getattr(p2_raw, 'x', p2_raw[0]))
+            v2_y = float(getattr(p2_raw, 'y', p2_raw[1]))
             
-        for _ in range(num_iterations):
-            new_turtles = []
-            active_turtles = [t for t in self.turtles if t.active]
-            
-            if not active_turtles:
-                break
-                
-            for turtle in active_turtles:
-                # 1. Proposal Phase
-                # Calculate proposed new position
-                dx = math.cos(turtle.angle) * self.params['step_size']
-                dy = math.sin(turtle.angle) * self.params['step_size']
-                new_x = turtle.x + dx
-                new_y = turtle.y + dy
-                
-                # 3. Snap or Create
-                target_node, dist = self.graph.get_nearest_node(new_x, new_y, self.params['snap_dist'])
-                
-                if target_node:
-                    # Snap to existing
-                    turtle.x = target_node.x
-                    turtle.y = target_node.y
-                    # Connect
-                    self.graph.add_edge(turtle.current_node, target_node, width=self.params['road_width'])
-                    # Stop turtle if we hit an existing part of the graph (loop closure)
-                    turtle.active = False
-                else:
-                    # Create new
-                    turtle.x = new_x
-                    turtle.y = new_y
-                    target_node = self.graph.add_node(new_x, new_y)
-                    self.graph.add_edge(turtle.current_node, target_node, width=self.params['road_width'])
-                    
-                    # Update turtle state
-                    turtle.current_node = target_node
-                    
-                    # 4. Branching
-                    if len(self.turtles) + len(new_turtles) < 500: # Safety Cap
-                        if random.random() < self.params['branch_prob']:
-                            # Branch left or right
-                            angle_offset = math.pi/2 if random.random() < 0.5 else -math.pi/2
-                            new_angle = turtle.angle + angle_offset
-                            new_t = Turtle(turtle.x, turtle.y, new_angle)
-                            new_t.current_node = target_node
-                            new_turtles.append(new_t)
+            v1 = (v1_x, v1_y)
+            v2 = (v2_x, v2_y)
 
-            self.turtles.extend(new_turtles)
+            # 1. Skip zero-length segments
+            dist_sq = (v2[0]-v1[0])**2 + (v2[1]-v1[1])**2
+            if dist_sq < 0.1: 
+                continue
+
+            # 2. Get/Create Nodes (Spatial Hashing)
+            def get_node(v):
+                # Key is rounded to 1 decimal place (10cm precision)
+                key = (round(v[0], 1), round(v[1], 1))
+                if key not in node_map:
+                    node_map[key] = self.graph.add_node(key[0], key[1])
+                return node_map[key]
+
+            n1 = get_node(v1)
+            n2 = get_node(v2)
+
+            # 3. Create Edge
+            if n1 != n2:
+                self.graph.add_edge(n1, n2, width=float(width))
+                edges_created += 1
+
+        print(f"DEBUG: Graph Built. Nodes: {len(self.graph.nodes)} (Merged from raw endpoints). Edges: {edges_created}")
+
+    def generate_buildings(self):
+        """
+        Populate the city with buildings along the road edges.
+        """
+        self.buildings = []
+        
+        for edge in self.graph.edges:
+            # 1. Edge Vector & Normal
+            p1 = glm.vec2(edge.start_node.x, edge.start_node.y)
+            p2 = glm.vec2(edge.end_node.x, edge.end_node.y)
+            
+            vec = p2 - p1
+            length = glm.length(vec)
+            if length < 1.0: continue
+            
+            direction = glm.normalize(vec)
+            normal = glm.vec2(-direction.y, direction.x) # Perpendicular
+            
+            # Simple shrinking
+            start_dist = 2.0 
+            end_dist = length - 2.0
+            
+            if end_dist <= start_dist: continue
+            
+            # 3. Iterate along edge
+            curr_dist = start_dist
+            
+            while curr_dist + 10.0 < end_dist: # Ensure fits
+                # Current position on road center
+                pos = p1 + direction * curr_dist
+                
+                frontage_dist = (edge.width / 2) + 2.0
+                
+                # We place two buildings: Left (-Normal) and Right (+Normal)
+                for side in [-1, 1]:
+                    # Randomize Lot Size
+                    width = random.uniform(10.0, 14.0)
+                    depth = random.uniform(12.0, 20.0)
+                    
+                    # Calculate Center
+                    center_dist = frontage_dist + depth / 2.0
+                    center_pos = pos + (normal * side) * center_dist
+                    
+                    b_forward = normal * side
+                    b_right = direction
+                    
+                    # Corners
+                    half_w = width / 2.0
+                    half_d = depth / 2.0
+                    
+                    c1 = center_pos - b_right * half_w - b_forward * half_d
+                    c2 = center_pos + b_right * half_w - b_forward * half_d
+                    c3 = center_pos + b_right * half_w + b_forward * half_d
+                    c4 = center_pos - b_right * half_w + b_forward * half_d
+                    
+                    poly = Polygon([c1, c2, c3, c4])
+                    
+                    # Create Building Instance
+                    height = random.uniform(20.0, 60.0)
+                    
+                    # Random Style
+                    style = {
+                        "color": glm.vec4(random.random(), random.random(), random.random(), 1.0),
+                        "stepped": random.random() < 0.4,
+                        "window_ratio": random.uniform(0.4, 0.7)
+                    }
+                    
+                    b = Building(poly, height, style)
+                    self.buildings.append(b.generate())
+                
+                # Advance
+                curr_dist += width + random.uniform(2.0, 5.0) # Gap between buildings
