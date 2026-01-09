@@ -77,6 +77,11 @@ class CityGenerator:
                 self.graph.add_edge(n1, n2, width=float(width))
                 edges_created += 1
 
+        # 4. Generate Intersection Connections
+        print("DEBUG: Generating Intersection Curves...")
+        for node in self.graph.nodes:
+            node.generate_connections()
+
         print(f"DEBUG: Graph Built. Nodes: {len(self.graph.nodes)} (Merged from raw endpoints). Edges: {edges_created}")
 
     def generate_buildings(self):

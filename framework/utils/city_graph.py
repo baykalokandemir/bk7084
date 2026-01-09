@@ -14,28 +14,23 @@ class Lane:
         self.waypoints = waypoints # List of glm.vec3
         self.parent_edge = parent_edge
 
-    def get_point(self, distance):
-        """
-        Returns a point along the lane at the given distance.
-        Simple linear interpolation between waypoints.
-        """
-        if not self.waypoints:
-            return glm.vec3(0)
-            
-        total_len = 0
-        for i in range(len(self.waypoints) - 1):
-            p1 = self.waypoints[i]
-            p2 = self.waypoints[i+1]
-            seg_len = glm.length(p2 - p1)
-            
-            if distance <= total_len + seg_len:
-                # Interpolate here
-                t = (distance - total_len) / seg_len
-                return glm.mix(p1, p2, t)
-            
-            total_len += seg_len
-            
-        return self.waypoints[-1] # Clamp to end
+    def __repr__(self):
+        return f"Lane(id={self.id}, w={self.width})"
+
+def get_bezier_points(p0, p1, p2, p3, steps=10):
+    points = []
+    for i in range(steps + 1):
+        t = i / steps
+        u = 1 - t
+        tt = t * t
+        uu = u * u
+        uuu = uu * u
+        ttt = tt * t
+        
+        # p = u^3*P0 + 3*u^2*t*P1 + 3*u*t^2*P2 + t^3*P3
+        p = (p0 * uuu) + (p1 * (3 * uu * t)) + (p2 * (3 * u * tt)) + (p3 * ttt)
+        points.append(p)
+    return points
 
 class Node:
     """
@@ -51,6 +46,89 @@ class Node:
         self.edges = []
         # Mapping (from_lane_id, to_lane_id) -> List[vec3] waypoints
         self.connections = {} 
+
+    def generate_connections(self):
+        """
+        Generates curved paths between incoming and outgoing lanes.
+        """
+        self.connections = {}
+        
+        # 1. Identify Incoming and Outgoing Lanes
+        incoming = [] # List of (Lane, DirectionVec3)
+        outgoing = [] # List of (Lane, DirectionVec3)
+        
+        for edge in self.edges:
+            if not hasattr(edge, 'lanes'): continue
+            
+            # Check orientation
+            p1 = glm.vec3(edge.start_node.x, 0, edge.start_node.y)
+            p2 = glm.vec3(edge.end_node.x, 0, edge.end_node.y)
+            edge_dir = glm.normalize(p2 - p1)
+            
+            # Lanes: 0 is Forward (p1->p2), 1 is Backward (p2->p1)
+            # If Node is Start (p1), Forward leaves, Backward arrives.
+            if edge.start_node == self:
+                # Outgoing: Lane 0
+                if len(edge.lanes) > 0:
+                    outgoing.append((edge.lanes[0], edge_dir))
+                # Incoming: Lane 1
+                if len(edge.lanes) > 1:
+                    # Incoming dir is p2->p1 (-edge_dir)
+                    incoming.append((edge.lanes[1], -edge_dir))
+            
+            # If Node is End (p2), Forward arrives, Backward leaves.
+            elif edge.end_node == self:
+                # Incoming: Lane 0
+                if len(edge.lanes) > 0:
+                    incoming.append((edge.lanes[0], edge_dir))
+                # Outgoing: Lane 1
+                if len(edge.lanes) > 1:
+                    # Outgoing dir is p2->p1 (-edge_dir)
+                    outgoing.append((edge.lanes[1], -edge_dir))
+
+        # 2. Connect All valid pairs
+        for in_lane, in_dir in incoming:
+            for out_lane, out_dir in outgoing:
+                if in_lane.parent_edge == out_lane.parent_edge:
+                    continue # Don't U-Turn immediately (optional)
+                
+                # Determine turn type by angle
+                # Cross product Y component tells Left vs Right
+                # Dot product tells Straight vs Reverse
+                
+                # angle 0 -> Straight (Dot ~ 1)
+                # angle -90 -> Right (Cross.y > 0? No, let's check)
+                # angle +90 -> Left
+                
+                dot = glm.dot(in_dir, out_dir)
+                cross_y = (in_dir.z * out_dir.x) - (in_dir.x * out_dir.z)
+                
+                # Heuristics
+                is_straight = dot > 0.5
+                is_right = cross_y > 0.1 # Right Hand Rule: X cross Z = -Y. 
+                # Wait, if Forward=(0,-1) and Right=(1,0). 
+                # x=0,z=-1. x=1,z=0.
+                # (z*x') - (x*z') = (-1*1) - (0*0) = -1. So CrossY < 0 is Right?
+                # Let's rely on standard: Right turn means out_dir is roughly -90 deg from in_dir.
+                
+                # We connect everything for now! Cars choose paths.
+                # Just need to generate valid geometry.
+                
+                p0 = in_lane.waypoints[-1]
+                p3 = out_lane.waypoints[0]
+                
+                dist = glm.length(p3 - p0)
+                if dist < 0.1: continue
+                
+                # Control Points
+                # P1: Extend incoming tangent
+                p1 = p0 + (in_dir * (dist * 0.5))
+                # P2: Extend outgoing tangent backwards
+                p2 = p3 - (out_dir * (dist * 0.5))
+                
+                curve = get_bezier_points(p0, p1, p2, p3, steps=8)
+                
+                self.connections[(in_lane.id, out_lane.id)] = curve
 
     def add_edge(self, edge):
         if edge not in self.edges:

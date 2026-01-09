@@ -60,6 +60,25 @@ class MeshGenerator:
                     verts.append(v2)
                     colors.append(color)
                     colors.append(color)
+        
+        # Draw Intersection Connections (Curves)
+        c_curve = glm.vec4(0.0, 1.0, 1.0, 1.0) # Cyan
+        
+        for node in graph.nodes:
+            for curve_points in node.connections.values():
+                if len(curve_points) < 2: continue
+                
+                for i in range(len(curve_points) - 1):
+                    p1 = curve_points[i]
+                    p2 = curve_points[i+1]
+                    
+                    v1 = glm.vec4(p1.x, y_off, p1.z, 1.0)
+                    v2 = glm.vec4(p2.x, y_off, p2.z, 1.0)
+                    
+                    verts.append(v1)
+                    verts.append(v2)
+                    colors.append(c_curve)
+                    colors.append(c_curve)
             
         # Pack into Shape
         if not verts: return Shape()
