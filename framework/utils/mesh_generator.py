@@ -21,58 +21,45 @@ class MeshGenerator:
         c_fwd = glm.vec4(0.0, 1.0, 0.2, 1.0) # Neon Green
         c_bwd = glm.vec4(1.0, 0.0, 0.2, 1.0) # Neon Red
         
+        
         y_off = 0.8 # Lift higher above road
         
         for edge in graph.edges:
-            # 1. Robust Coordinate Extraction
-            # Nodes might store vec3, vec2, or tuples. Force to vec3(x, 0, z)
-            def to_vec3(n):
-                if hasattr(n, 'x') and hasattr(n, 'y'):
-                    return glm.vec3(n.x, 0, n.y) # Assume flat 2D graph logic
-                return glm.vec3(n[0], 0, n[1])
+            # New Lane Logic
+            if not hasattr(edge, 'lanes') or not edge.lanes:
+                continue
                 
-            p1 = to_vec3(edge.start_node)
-            p2 = to_vec3(edge.end_node)
-            
-            # 2. Check length to prevent NaN
-            direction = p2 - p1
-            length = glm.length(direction)
-            
-            if length < 0.1: continue
+            for lane in edge.lanes:
+                # Determine color based on index or direction?
+                # We stored Forward first, Backward second in edge.generate_lanes()
+                # Lane 0 = Forward, Lane 1 = Backward (usually)
                 
-            # 3. Safe Math (using vec3 for calculations)
-            dir_norm = glm.normalize(direction)
-            # Perpendicular vector (rotate 90 deg around Y) -> (x, 0, z) -> (-z, 0, x)
-            perp = glm.vec3(-dir_norm.z, 0, dir_norm.x)
-            
-            # Offset amount (0.15 of width to pull towards center)
-            offset = (edge.width * 0.15)
-            
-            # 4. Calculate Lane Centers (still vec3)
-            # Forward Lane (Right side)
-            f_start = p1 + perp * offset
-            f_end   = p2 + perp * offset
-            
-            # Backward Lane (Left side)
-            b_start = p1 - perp * offset
-            b_end   = p2 - perp * offset
-            
-            # Lift up
-            f_start.y += y_off
-            f_end.y   += y_off
-            b_start.y += y_off
-            b_end.y   += y_off
-            
-            # 5. Append as Vec4 (Required for Renderer Stride)
-            verts.append(glm.vec4(f_start, 1.0))
-            verts.append(glm.vec4(f_end, 1.0))
-            colors.append(c_fwd)
-            colors.append(c_fwd)
-            
-            verts.append(glm.vec4(b_start, 1.0))
-            verts.append(glm.vec4(b_end, 1.0))
-            colors.append(c_bwd)
-            colors.append(c_bwd)
+                # Check travel direction relative to edge?
+                # Lane waypoints are ordered in travel direction.
+                # Let's simple check if start point is closer to edge.start or edge.end
+                
+                start_wp = lane.waypoints[0]
+                
+                # Just color by index for now to separate them visually if needed, 
+                # or assume 0 is Fwd, 1 is Bwd based on our generating logic.
+                
+                color = c_fwd if lane == edge.lanes[0] else c_bwd
+                if len(edge.lanes) > 2:
+                     # Fallback for future multi-lane
+                     color = c_fwd if (edge.lanes.index(lane) % 2 == 0) else c_bwd
+
+                # Draw Segments
+                for i in range(len(lane.waypoints) - 1):
+                    p1 = lane.waypoints[i]
+                    p2 = lane.waypoints[i+1]
+                    
+                    v1 = glm.vec4(p1.x, y_off, p1.z, 1.0)
+                    v2 = glm.vec4(p2.x, y_off, p2.z, 1.0)
+                    
+                    verts.append(v1)
+                    verts.append(v2)
+                    colors.append(color)
+                    colors.append(color)
             
         # Pack into Shape
         if not verts: return Shape()
