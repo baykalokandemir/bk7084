@@ -42,57 +42,18 @@ class AdvancedCityGenerator:
         self.street_light_poses = []
         self.road_network = RoadNetwork()
         
-        # 1. Carve out Town Square
-        city_sectors, town_square_poly = self._create_town_square(self.root)
+        # 1. Carve out Town Square (DISABLED for Hybrid Mode)
+        # city_sectors, town_square_poly = self._create_town_square(self.root)
         
         # Process Town Square
-        if town_square_poly:
-            # Generate Roundabout Ring (Closed Loop)
-            # Iterate vertices of the final town_square_poly
-            # These vertices correspond to the endpoints of the spoke roads (s2, s3 from _create_town_square)
-            # So connecting them creates the ring, and they should snap to the spoke nodes.
-            
-            verts = town_square_poly.vertices
-            n = len(verts)
-            for i in range(n):
-                v1 = verts[i]
-                v2 = verts[(i+1)%n]
-                # Width 14.0 (3 lanes + spacing)
-                self.road_network.add_segment(v1, v2, 14.0, 4)
-
-            # Sidewalk (Inner Ring, adjacent to park)
-            # The RoadNetwork now generates the road at the boundary of town_square_poly.
-            # town_square_poly IS the inner edge of the road ring?
-            # No, town_square_poly is the hexagon defined by v1-v2.
-            # In _create_town_square, we added v1-v2 as the road segment.
-            # So the road runs ALONG the edge of town_square_poly.
-            # Width 14.0. So it extends 7.0 inside and 7.0 outside.
-            
-            # We want a sidewalk INSIDE the road.
-            # So we need to inset town_square_poly by 7.0 (half road) + sidewalk_width.
-            
-            half_road_w = 7.0
-            sidewalk_w = 4.0
-            
-            sidewalk_outer = town_square_poly.inset(half_road_w)
-            sidewalk_inner = sidewalk_outer.inset(sidewalk_w)
-            
-            self._generate_sidewalk(sidewalk_outer, sidewalk_inner)
-            
-            # Park (Center)
-            park_poly = sidewalk_inner
-            
-            # Extrude slightly (grass)
-            park_shape = park_poly.extrude(0.5)
-            park_shape.colors = np.array([[0.2, 0.8, 0.2, 1.0]] * len(park_shape.vertices), dtype=np.float32)
-            self.parks.append(park_shape)
+        # if town_square_poly:
+            # ...
         
-        # 2. Generate Blocks (City Layout) from Sectors
+        # 2. Generate Blocks (City Layout) directly from Root
         raw_blocks = []
         
-        for sector in city_sectors:
-            # Start at depth 1 so sectors are split into 4-lane roads, then 2-lane.
-            self._split_city_recursive(sector, raw_blocks, 1)
+        # Start at depth 0 for major arterial roads (20m width)
+        self._split_city_recursive(self.root, raw_blocks, 0)
         
         # 3. Generate Road Meshes from Network
         road_meshes, road_edges = self.road_network.generate_meshes()
@@ -381,13 +342,12 @@ class AdvancedCityGenerator:
                     p1 = intersections[0]
                     p2 = intersections[1]
                     
-                    # Determine width/lanes based on depth
-                    if depth == 0:
-                        w, l = 20.0, 6
-                    elif depth == 1:
-                        w, l = 14.0, 4
-                    else:
-                        w, l = 8.0, 2
+                    p1 = intersections[0]
+                    p2 = intersections[1]
+                    
+                    # UNIFORM ROAD NETWORK (Width 8.0, 2 Lanes)
+                    # No more depth-based hierarchy
+                    w, l = 8.0, 2
                         
                     self.road_network.add_segment(p1, p2, w, l)
 
