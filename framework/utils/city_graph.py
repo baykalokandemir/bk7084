@@ -7,15 +7,17 @@ class Lane:
     """
     _id_counter = 0
 
-    def __init__(self, width, waypoints, parent_edge):
+    def __init__(self, width, waypoints, parent_edge, dest_node):
         self.id = Lane._id_counter
         Lane._id_counter += 1
         self.width = width
         self.waypoints = waypoints # List of glm.vec3
         self.parent_edge = parent_edge
+        self.dest_node = dest_node # [NEW] Explicit destination
+        self.start_node = parent_edge.start_node if dest_node == parent_edge.end_node else parent_edge.end_node
 
     def __repr__(self):
-        return f"Lane(id={self.id}, w={self.width})"
+        return f"Lane(id={self.id}, dest={self.dest_node.id})"
 
 def get_bezier_points(p0, p1, p2, p3, steps=10):
     points = []
@@ -220,7 +222,7 @@ class Edge:
         # Forward Lane (Right Side)
         f_start = lane_base_start + perp * offset_dist
         f_end   = lane_base_end + perp * offset_dist
-        self.lanes.append(Lane(width=lane_width, waypoints=[f_start, f_end], parent_edge=self))
+        self.lanes.append(Lane(width=lane_width, waypoints=[f_start, f_end], parent_edge=self, dest_node=self.end_node))
         
         # Backward Lane (Left Side) - Travel Direction is End -> Start
         # Relative to p1->p2 "Left" is the other side.
@@ -228,7 +230,7 @@ class Edge:
         b_end   = lane_base_end - perp * offset_dist
         
         # Backward Lane travels FROM End TO Start
-        self.lanes.append(Lane(width=lane_width, waypoints=[b_end, b_start], parent_edge=self))
+        self.lanes.append(Lane(width=lane_width, waypoints=[b_end, b_start], parent_edge=self, dest_node=self.start_node))
 
     def __repr__(self):
         return f"Edge(start={self.start_node.id}, end={self.end_node.id}, w={self.width}, lanes={len(self.lanes)})"

@@ -144,9 +144,10 @@ class CarAgent:
                 self.target_index = 1
             
         elif self.current_lane:
-            # We reached end of a Lane. Look for connections at the End Node.
-            edge = self.current_lane.parent_edge
-            node = edge.end_node
+            # We reached end of a Lane. Look for connections at the Dest Node.
+            # PREVIOUSLY BUGGY: edge = self.current_lane.parent_edge; node = edge.end_node
+            # CORRECT: Use explicit destination stored on Lane
+            node = self.current_lane.dest_node
             
             if not len(node.connections):
                  # No connections at all
