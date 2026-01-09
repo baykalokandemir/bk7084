@@ -77,7 +77,7 @@ def main():
     target_agent_count = [1] # List for ImGui (mutable)
 
     def regenerate():
-        nonlocal current_objects, city_mesh_obj, building_mesh_obj, debug_mesh_obj, agents
+        nonlocal current_objects, city_mesh_obj, building_mesh_obj, debug_mesh_obj, agents, city_gen
         
         # Clear old objects
         for obj in current_objects:
@@ -93,6 +93,9 @@ def main():
             if agent.mesh_object in glrenderer.objects:
                 glrenderer.objects.remove(agent.mesh_object)
         agents = []
+        
+        # Reset Generators (Clean State)
+        city_gen = CityGenerator() # [NEW] Fresh instance to wipe graph
         
         # 1. Generate BSP Layout (Visuals + Layout)
         print("Generating BSP Layout...")
@@ -153,8 +156,6 @@ def main():
             debug_mat.specular_strength = 0.0
             
             debug_mesh_obj = MeshObject(debug_shape, debug_mat)
-            debug_mesh_obj.draw_mode = gl.GL_LINES 
-            glrenderer.addObject(debug_mesh_obj)
             debug_mesh_obj.draw_mode = gl.GL_LINES 
             glrenderer.addObject(debug_mesh_obj)
             current_objects.append(debug_mesh_obj)
