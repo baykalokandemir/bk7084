@@ -11,7 +11,11 @@ from framework.materials import Material
 from framework.utils.city_generator import CityGenerator
 from framework.utils.advanced_city_generator import AdvancedCityGenerator
 from framework.utils.mesh_generator import MeshGenerator
+from framework.utils.mesh_generator import MeshGenerator
 from framework.utils.mesh_batcher import MeshBatcher
+from framework.utils.car_agent import CarAgent
+from framework.shapes.cube import Cube # [NEW]
+import random
 from framework.camera import Flycamera
 from framework.light import PointLight
 import OpenGL.GL as gl
@@ -68,8 +72,12 @@ def main():
     building_mesh_obj = None
     debug_mesh_obj = None
 
+    # [NEW] Agent State
+    agents = []
+    target_agent_count = [1] # List for ImGui (mutable)
+
     def regenerate():
-        nonlocal current_objects, city_mesh_obj, building_mesh_obj, debug_mesh_obj
+        nonlocal current_objects, city_mesh_obj, building_mesh_obj, debug_mesh_obj, agents
         
         # Clear old objects
         for obj in current_objects:
@@ -79,6 +87,12 @@ def main():
         city_mesh_obj = None
         building_mesh_obj = None
         debug_mesh_obj = None
+
+        # Clear Agents
+        for agent in agents:
+            if agent.mesh_object in glrenderer.objects:
+                glrenderer.objects.remove(agent.mesh_object)
+        agents = []
         
         # 1. Generate BSP Layout (Visuals + Layout)
         print("Generating BSP Layout...")
@@ -141,7 +155,60 @@ def main():
             debug_mesh_obj = MeshObject(debug_shape, debug_mat)
             debug_mesh_obj.draw_mode = gl.GL_LINES 
             glrenderer.addObject(debug_mesh_obj)
+            debug_mesh_obj.draw_mode = gl.GL_LINES 
+            glrenderer.addObject(debug_mesh_obj)
             current_objects.append(debug_mesh_obj)
+        
+        # 5. [NEW] Visualize Auditor Failures (Red Cubes)
+        if hasattr(city_gen, 'dead_end_lanes') and city_gen.dead_end_lanes:
+            batcher_fails = MeshBatcher()
+            
+            # Create a localized Cube shape once
+            fail_cube = Cube(color=glm.vec4(1.0, 1.0, 0.0, 0.4), side_length=3.0)
+            fail_cube.createGeometry()
+            
+            # We must manually transform and add to batcher?
+            # Batcher expects 'shapes'.
+            # A Shape stores vertices in local space usually, but Batcher merges them.
+            # If we want 50 cubes at different positions, we need 50 Shape objects with baked positions,
+            # OR we reuse the same shape but modify vertices? The Batcher reads vertices.
+            
+            # Easiest: Create a new Cube shape for each failure, or modify vertices.
+            # Let's just create new Cube objects. It's initialization time, so fine.
+            
+            for lane in city_gen.dead_end_lanes:
+                 if lane.waypoints:
+                     p = lane.waypoints[-1]
+                     # Make a cube at p
+                     c = Cube(color=glm.vec4(1.0, 1.0, 0.0, 0.8), side_length=3.0)
+                     c.createGeometry()
+                     
+                     # Translate vertices manually to p
+                     offset = glm.vec3(p.x, 1.0, p.z) # Lift slightly
+                     
+                     # Dirty hack: Modify c.vertices in place?
+                     # c.vertices is numpy array [ [x,y,z,w], ... ]
+                     # We can just add offset.
+                     # But numpy addition needs broadcasing.
+                     
+                     # shape.translate? Not implemented?
+                     # Let's do manual loop or numpy add.
+                     # c.vertices[:, 0] += offset.x
+                     # c.vertices[:, 1] += offset.y
+                     # c.vertices[:, 2] += offset.z
+                     
+                     c.vertices[:, 0] += offset.x
+                     c.vertices[:, 1] += offset.y
+                     c.vertices[:, 2] += offset.z
+                     
+                     batcher_fails.add_shape(c)
+            
+            fail_mesh = batcher_fails.build(Material())
+            # Unlit Red
+            fail_mesh.material.uniforms = {"ambientStrength": 1.0}
+            
+            glrenderer.addObject(fail_mesh)
+            current_objects.append(fail_mesh)
         
         print(f"Done. Nodes: {len(city_gen.graph.nodes)}, Edges: {len(city_gen.graph.edges)}")
             
@@ -152,6 +219,42 @@ def main():
     while not glfw.window_should_close(window.window):
         impl.process_inputs()
         camera.update(0.016)
+        
+        # --- Traffic Simulation ---
+        # 1. Spawn / Despawn
+        while len(agents) > target_agent_count[0]:
+            removed = agents.pop()
+            if removed.mesh_object in glrenderer.objects:
+                glrenderer.objects.remove(removed.mesh_object)
+        
+        if len(agents) < target_agent_count[0]:
+            if city_gen.graph.edges:
+                edge = random.choice(city_gen.graph.edges)
+                if hasattr(edge, 'lanes') and edge.lanes:
+                    lane = random.choice(edge.lanes)
+                    ag = CarAgent(lane)
+                    
+                    # Random color tweak?
+                    # ag.mesh_object.material.uniforms['color'] = ... (Need shader support)
+                    
+                    agents.append(ag)
+                    glrenderer.addObject(ag.mesh_object)
+        
+        # 2. Update Agents
+        for agent in agents:
+            agent.update(0.016)
+            
+        # 3. Cleanup Dead Agents
+        # Iterate copy or use list comprehension to filter
+        alive_agents = []
+        for agent in agents:
+            if agent.alive:
+                alive_agents.append(agent)
+            else:
+                # Remove from renderer
+                if agent.mesh_object in glrenderer.objects:
+                    glrenderer.objects.remove(agent.mesh_object)
+        agents = alive_agents
         
         # Handle Toggle Logic (State Sync)
         if building_mesh_obj:
@@ -167,8 +270,17 @@ def main():
         imgui.new_frame()
         imgui.begin("City Controls")
         
+        # [NEW] Debug Render
+        # Ideally render debug AFTER main render to draw on top, but depth test handles it.
+        # CarAgent uses immediate draw call on a mesh object.
+        for agent in agents:
+            agent.render_debug(glrenderer, camera)
+            
         if imgui.button("Regenerate"):
             regenerate()
+            
+        _, target_agent_count[0] = imgui.slider_int("Car Count", target_agent_count[0], 0, 50)
+        imgui.separator()
             
         _, show_buildings[0] = imgui.checkbox("Show Buildings", show_buildings[0])
             

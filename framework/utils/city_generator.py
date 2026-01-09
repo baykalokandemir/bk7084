@@ -81,8 +81,77 @@ class CityGenerator:
         print("DEBUG: Generating Intersection Curves...")
         for node in self.graph.nodes:
             node.generate_connections()
+            
+        # 5. [NEW] Audit Graph
+        self.audit_graph()
 
         print(f"DEBUG: Graph Built. Nodes: {len(self.graph.nodes)} (Merged from raw endpoints). Edges: {edges_created}")
+
+    def audit_graph(self):
+        print("DEBUG: Auditing Graph Connectivity...")
+        self.dead_end_lanes = []
+        loop_count = 0
+        
+        for edge in self.graph.edges:
+            if not hasattr(edge, 'lanes'): continue
+            
+            # Check Looping Edge
+            if edge.start_node == edge.end_node:
+                loop_count += 1
+                
+            for lane in edge.lanes:
+                end_node = edge.end_node
+                
+                # If Lane is Backward (odd index usually, or stored in list), direction matters.
+                # In Edge.generate_lanes:
+                # Lanes 0..N-1 are Forward (Start->End)
+                # Lanes N..M are Backward (End->Start)
+                # Wait, my Edge logic splits them.
+                # If lane is in 'forward' set, end_node is edge.end_node.
+                # If lane is in 'backward' set, end_node is edge.start_node.
+                
+                # Let's rely on Lane Waypoints?
+                # Waypoints are ordered travel direction. 
+                # So lane.waypoints[-1] is near the "Exit Node".
+                # But which Node object is that?
+                # Lane doesn't store "Exit Node" reference directly, only Parent Edge.
+                
+                # Recalculate which node is the exit:
+                # Forward Lane: exit is edge.end_node
+                # Backward Lane: exit is edge.start_node
+                
+                # Check Edge.lanes structure:
+                # It currently generates a flat list. But how do we know which is Fwd/Bwd?
+                # We can check distance from last waypoint to nodes.
+                
+                if not lane.waypoints: continue
+                last_wp = lane.waypoints[-1]
+                
+                n1_pos = glm.vec3(edge.start_node.x, 0, edge.start_node.y)
+                n2_pos = glm.vec3(edge.end_node.x, 0, edge.end_node.y)
+                
+                d1 = glm.distance(last_wp, n1_pos)
+                d2 = glm.distance(last_wp, n2_pos)
+                
+                exit_node = edge.start_node if d1 < d2 else edge.end_node
+                
+                # Check connections starting from this lane
+                # keys are (from_id, to_id)
+                outgoing_count = 0
+                for k in exit_node.connections.keys():
+                    if k[0] == lane.id:
+                        outgoing_count += 1
+                        
+                if outgoing_count == 0:
+                    self.dead_end_lanes.append(lane)
+                    
+        print(f"[AUDIT] Found {len(self.dead_end_lanes)} lanes with no outlets.")
+        if loop_count > 0:
+            print(f"[AUDIT] Found {loop_count} zero-length loop edges.")
+            
+        # Log first few
+        for i, lane in enumerate(self.dead_end_lanes[:5]):
+            print(f"[FAIL] Lane {lane.id} has no outlets.")
 
     def generate_buildings(self):
         """

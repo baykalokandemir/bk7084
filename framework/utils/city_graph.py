@@ -60,30 +60,38 @@ class Node:
         for edge in self.edges:
             if not hasattr(edge, 'lanes'): continue
             
-            # Check orientation
             p1 = glm.vec3(edge.start_node.x, 0, edge.start_node.y)
             p2 = glm.vec3(edge.end_node.x, 0, edge.end_node.y)
             edge_dir = glm.normalize(p2 - p1)
             
-            # Lanes: 0 is Forward (p1->p2), 1 is Backward (p2->p1)
-            # If Node is Start (p1), Forward leaves, Backward arrives.
+            # Logic:
+            # Lane 0 is Forward (p1->p2)
+            # Lane 1 is Backward (p2->p1)
+            
             if edge.start_node == self:
+                # We are at p1.
+                # Traffic LEAVING us goes to p2 (Forward, Lane 0).
+                # Traffic ARRIVING at us comes from p2 (Backward, Lane 1).
+                
                 # Outgoing: Lane 0
                 if len(edge.lanes) > 0:
                     outgoing.append((edge.lanes[0], edge_dir))
+                
                 # Incoming: Lane 1
                 if len(edge.lanes) > 1:
-                    # Incoming dir is p2->p1 (-edge_dir)
-                    incoming.append((edge.lanes[1], -edge_dir))
-            
-            # If Node is End (p2), Forward arrives, Backward leaves.
+                    incoming.append((edge.lanes[1], -edge_dir)) # Dir toward self
+                    
             elif edge.end_node == self:
+                # We are at p2.
+                # Traffic LEAVING us goes to p1 (Backward, Lane 1).
+                # Traffic ARRIVING at us comes from p1 (Forward, Lane 0).
+                
                 # Incoming: Lane 0
                 if len(edge.lanes) > 0:
-                    incoming.append((edge.lanes[0], edge_dir))
+                    incoming.append((edge.lanes[0], edge_dir)) # Dir toward self
+                
                 # Outgoing: Lane 1
                 if len(edge.lanes) > 1:
-                    # Outgoing dir is p2->p1 (-edge_dir)
                     outgoing.append((edge.lanes[1], -edge_dir))
 
         # 2. Connect All valid pairs
