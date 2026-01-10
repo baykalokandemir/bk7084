@@ -16,7 +16,8 @@ Represents a single driveable strip of road.
         - For Forward Lanes (index 0), `dest_node` is `edge.end_node`.
         - For Backward Lanes (index 1), `dest_node` is `edge.start_node`.
 - **Key Logic**:
-    - Stores directional metadata ensuring agents know exactly which intersection they are approaching, preventing "U-turn" logic errors on backward lanes.
+    - **Subdivision**: Long edges are now interpolated every 5.0 units. This creates multiple waypoints per lane, preventing physics "teleportation" and ensuring reliable stuck detection on long straights.
+    - **Directionality**: Stores directional metadata ensuring agents know exactly which intersection they are approaching.
 
 ### 2. `Node` (Intersection)
 Represents a junction where roads meet.

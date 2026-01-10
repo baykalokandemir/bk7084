@@ -101,23 +101,19 @@ class CarAgent:
                 self.position += move_step
         else:
             # Snap and increment
-            self.position = target
+            self.position = glm.vec3(target) # [FIX] Explicit Copy
             self.target_index += 1
             
         # Update Transform
         self._update_transform()
-        
+
     def _update_transform(self):
         # Translate
         mat = glm.translate(self.position)
         
         # Rotate to face orientation
         # Default Car faces +Z? Check Car class.
-        # Car class: "Front face (z = +len/2)". So +Z is Front.
         # We want +Z to align with self.orientation.
-        
-        # LookAt is usually (eye, center, up).
-        # We want a rotation that maps (0,0,1) to orientation.
         
         # Simple method: atan2
         # yaw = atan2(dir.x, dir.z)
@@ -127,8 +123,6 @@ class CarAgent:
         scale = glm.scale(glm.vec3(1.5, 1.5, 1.5))
         
         self.mesh_object.transform = mat * rot * scale
-        
-        # Also ensure wheel rotation or similar? (Not needed for simple viz)
 
     def pick_next_path(self):
         # We reached end of current path
@@ -147,7 +141,8 @@ class CarAgent:
             
             # Snap to start to fix drift
             if self.path:
-                self.position = self.path[0]
+                p = self.path[0]
+                self.position = glm.vec3(p.x, p.y, p.z) # [FIX] Explicit Copy
                 self.target_index = 1
             
         elif self.current_lane:

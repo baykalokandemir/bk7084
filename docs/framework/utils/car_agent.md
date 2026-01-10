@@ -31,8 +31,10 @@ The agent follows a list of `waypoints` (typically a `Lane` or a Bezier `Curve`)
 - **System**: Auto-incrementing `_id_counter` assigns a unique `self.id` to every agent.
 - **Telemetry**: All logs (`[ALERT]`, `[WARN]`, `[DEBUG]`) now include `[Car {id}]` prefix to distinguish agents in multi-agent scenarios.
 
-### 5. Navigation Tuning **[NEW]**
-- **Waypoint Acceptance**: Radius increased from `0.001` to `0.1`.
-    - **Why**: Prevents "jitter" where the agent overshoots the target microscopically, or where the `normalize` vector becomes unstable at extreme proximity.
-- **Visual Debugging**:
-    - **`render_debug(renderer, camera)`**: Renders a **Bright Yellow Sphere** at the agent's current *Target Waypoint*.
+### 6. Graph Integrity (Wormhole Fix) **[CRITICAL]**
+- **Problem**: Python passes object references by default. Assigning `self.position = graph_node_pos` meant the agent held a reference to the **actual city graph node**.
+- **Consequence**: When the agent moved (`self.position += step`), it dragged the graph node with it, corrupting the road network for all other cars.
+- **Solution**: Explicitly copy vectors using `glm.vec3(target)` or `glm.vec3(node.x, node.y, node.z)` when transferring data from Graph to Agent.
+
+### 7. Visual Debugging
+- **`render_debug(renderer, camera)`**: Renders a **Bright Yellow Sphere** at the agent's current *Target Waypoint*.
