@@ -294,7 +294,7 @@ def main():
         imgui.render()
         impl.render(imgui.get_draw_data())
         
-        glfw.swap_buffers(window.window)
+        glfw.swap_buffers(window.window)fdsagasdgdsaf
         glfw.poll_events()
         
     window.delete()
