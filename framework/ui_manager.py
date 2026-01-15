@@ -23,6 +23,18 @@ class UIManager:
             changed_scale, config.GLTF_SCALE = imgui.slider_float("GLTF Scale", config.GLTF_SCALE, 0.01, 1.0)
             
             changed_cloud, config.USE_POINT_CLOUD = imgui.checkbox("Use Point Cloud", config.USE_POINT_CLOUD)
+
+            imgui.separator()
+            imgui.text("Point Settings")
+            _, config.POINT_SIZE = imgui.slider_float("Point Size", config.POINT_SIZE, 1.0, 50.0)
+            
+            clicked_shape, current_shape = imgui.combo("Point Shape", config.POINT_SHAPE, config.POINT_SHAPES)
+            if clicked_shape:
+                config.POINT_SHAPE = current_shape
+                
+            imgui.text("Animation")
+            _, config.ANIM_RESIZE_X = imgui.checkbox("Resize Horizontal", config.ANIM_RESIZE_X)
+            _, config.ANIM_RESIZE_Y = imgui.checkbox("Resize Vertical", config.ANIM_RESIZE_Y)
             
             imgui.separator()
             imgui.text("Model Loading")
@@ -94,6 +106,20 @@ class UIManager:
             if changed_color_slice:
                 h, s, v = colorsys.rgb_to_hsv(*config.SLICE_COLOR)
                 config.SLICE_HUE = h
+            changed_color_slice, config.SLICE_COLOR = imgui.color_edit3("Slice Color", *config.SLICE_COLOR)
+            if changed_color_slice:
+                h, s, v = colorsys.rgb_to_hsv(*config.SLICE_COLOR)
+                config.SLICE_HUE = h
+                
+        # Post Processing
+        if imgui.collapsing_header("Post Processing", visible=True)[0]:
+            _, config.USE_ABERRATION = imgui.checkbox("Enable Chromatic Aberration", config.USE_ABERRATION)
+            if config.USE_ABERRATION:
+                _, config.ABERRATION_STRENGTH = imgui.slider_float("Aberration Strength", config.ABERRATION_STRENGTH, 0.0, 0.05, "%.4f")
+            
+            _, config.USE_BLUR = imgui.checkbox("Enable Blur", config.USE_BLUR)
+            if config.USE_BLUR:
+                _, config.BLUR_STRENGTH = imgui.slider_float("Blur Strength", config.BLUR_STRENGTH, 0.0001, 0.01, "%.4f")
             
         imgui.end()
         
