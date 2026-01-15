@@ -9,8 +9,12 @@ from framework.materials.material import Material
 class CarAgent:
     # Shared Debug Shape (Static)
     debug_sphere_mesh = None
+    _id_counter = 0 # [NEW] Identity Persistence
 
     def __init__(self, start_lane, car_shape=None):
+        self.id = CarAgent._id_counter
+        CarAgent._id_counter += 1
+        
         self.current_lane = start_lane
         self.current_curve = None # List of points if turning
         self.speed = 15.0 # Units/sec
@@ -64,7 +68,7 @@ class CarAgent:
         if glm.distance(self.position, self.last_position) < 0.01:
             self.time_since_last_move += dt
             if self.time_since_last_move > 2.0:
-                print(f"[ALERT] Car stuck at {self.position}. Target Index: {self.target_index}/{len(self.path) if self.path else 0}")
+                print(f"[ALERT] [Car {self.id}] Stuck at {self.position}. Target Index: {self.target_index}/{len(self.path) if self.path else 0}")
                 self.time_since_last_move = 0.0 # Reset to avoid spam
         else:
             self.time_since_last_move = 0.0
@@ -83,7 +87,8 @@ class CarAgent:
         dist = glm.length(vec_to_target)
         
         # Move
-        if dist > 0.001:
+        # [TUNING] Increased radius to 0.1 to prevent jitter near target
+        if dist > 0.1:
             direction = glm.normalize(vec_to_target)
             self.orientation = direction
             move_step = direction * self.speed * dt
@@ -95,22 +100,20 @@ class CarAgent:
             else:
                 self.position += move_step
         else:
+            # Snap and increment
+            self.position = glm.vec3(target) # [FIX] Explicit Copy
             self.target_index += 1
             
         # Update Transform
         self._update_transform()
-        
+
     def _update_transform(self):
         # Translate
         mat = glm.translate(self.position)
         
         # Rotate to face orientation
         # Default Car faces +Z? Check Car class.
-        # Car class: "Front face (z = +len/2)". So +Z is Front.
         # We want +Z to align with self.orientation.
-        
-        # LookAt is usually (eye, center, up).
-        # We want a rotation that maps (0,0,1) to orientation.
         
         # Simple method: atan2
         # yaw = atan2(dir.x, dir.z)
@@ -120,8 +123,6 @@ class CarAgent:
         scale = glm.scale(glm.vec3(1.5, 1.5, 1.5))
         
         self.mesh_object.transform = mat * rot * scale
-        
-        # Also ensure wheel rotation or similar? (Not needed for simple viz)
 
     def pick_next_path(self):
         # We reached end of current path
@@ -136,11 +137,12 @@ class CarAgent:
             self.current_curve = None
             self.path = self.current_lane.waypoints
             self.target_index = 0
-            # print(f"[DEBUG] Finished Turn. Entering Lane {self.current_lane.id}")
+            # print(f"[DEBUG] [Car {self.id}] Finished Turn. Entering Lane {self.current_lane.id}")
             
             # Snap to start to fix drift
             if self.path:
-                self.position = self.path[0]
+                p = self.path[0]
+                self.position = glm.vec3(p.x, p.y, p.z) # [FIX] Explicit Copy
                 self.target_index = 1
             
         elif self.current_lane:
@@ -151,7 +153,7 @@ class CarAgent:
             
             if not len(node.connections):
                  # No connections at all
-                 print(f"[WARN] Despawning car at Node {node.id} (No connections).")
+                 print(f"[WARN] [Car {self.id}] Despawning at Node {node.id} (No connections).")
                  self.alive = False
                  return
 
@@ -187,14 +189,14 @@ class CarAgent:
                     
                     # Do not snap position, curve starts at lane end (roughly)
                     self.current_lane = None
-                    print(f"[DEBUG] Car at Node {node.id} chose turn to Lane {next_lane.id}. Path Len: {len(self.path)}")
+                    print(f"[DEBUG] [Car {self.id}] At Node {node.id} chose turn to Lane {next_lane.id}. Path Len: {len(self.path)}")
                 else:
-                    print(f"[ERROR] Car at Node {node.id}: Selected connection {key} but could not find Next Lane object!")
+                    print(f"[ERROR] [Car {self.id}] At Node {node.id}: Selected connection {key} but could not find Next Lane object!")
                     # Hard fail or Despawn? Despawn to be safe
                     self.alive = False
             else:
                 # Dead End (e.g. edge of map)
-                print(f"[WARN] Despawning car at Node {node.id} (Lane {self.current_lane.id} has no outlets).")
+                print(f"[WARN] [Car {self.id}] Despawning at Node {node.id} (Lane {self.current_lane.id} has no outlets).")
                 self.alive = False
 
     def render_debug(self, renderer, camera):
