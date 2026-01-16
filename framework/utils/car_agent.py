@@ -5,6 +5,7 @@ from framework.objects.mesh_object import MeshObject
 from framework.shapes.car import Car
 from framework.shapes.uvsphere import UVSphere
 from framework.materials.material import Material
+from framework.shapes.cars.tank import Tank
 
 class CarAgent:
     # Shared Debug Shape (Static)
@@ -39,14 +40,18 @@ class CarAgent:
         self.alive = True # [NEW] Signal for removal
 
         # Visuals
-        # Create a dedicated MeshObject for this agent
-        # We share the geometry (Car Shape) but have unique transform (MeshObject)
         if car_shape is None:
-            # Bright Yellow
-            car_shape = Car(body_color=glm.vec4(1.0, 1.0, 0.0, 1.0))
-            car_shape.createGeometry()
+            # Default to Tank if nothing provided
+            car_shape = Tank()
             
-        self.mesh_object = MeshObject(car_shape, Material())
+        # Determine if car_shape is a raw Geometry (Shape) or a Full Object (BaseVehicle)
+        from framework.shapes.shape import Shape
+        if isinstance(car_shape, Shape):
+             # Wrap raw geometry in a MeshObject
+             self.mesh_object = MeshObject(car_shape, Material())
+        else:
+             # Assume it is already a renderable Object (e.g. Tank, BaseVehicle)
+             self.mesh_object = car_shape
         
         # Randomize color slightly via material uniform? 
         # Car shape has baked colors. 
@@ -68,7 +73,7 @@ class CarAgent:
         if glm.distance(self.position, self.last_position) < 0.01:
             self.time_since_last_move += dt
             if self.time_since_last_move > 2.0:
-                print(f"[ALERT] [Car {self.id}] Stuck at {self.position}. Target Index: {self.target_index}/{len(self.path) if self.path else 0}")
+                # print(f"[ALERT] [Car {self.id}] Stuck at {self.position}. Target Index: {self.target_index}/{len(self.path) if self.path else 0}")
                 self.time_since_last_move = 0.0 # Reset to avoid spam
         else:
             self.time_since_last_move = 0.0
@@ -153,7 +158,7 @@ class CarAgent:
             
             if not len(node.connections):
                  # No connections at all
-                 print(f"[WARN] [Car {self.id}] Despawning at Node {node.id} (No connections).")
+                 # print(f"[WARN] [Car {self.id}] Despawning at Node {node.id} (No connections).")
                  self.alive = False
                  return
 
@@ -189,14 +194,14 @@ class CarAgent:
                     
                     # Do not snap position, curve starts at lane end (roughly)
                     self.current_lane = None
-                    print(f"[DEBUG] [Car {self.id}] At Node {node.id} chose turn to Lane {next_lane.id}. Path Len: {len(self.path)}")
+                    # print(f"[DEBUG] [Car {self.id}] At Node {node.id} chose turn to Lane {next_lane.id}. Path Len: {len(self.path)}")
                 else:
-                    print(f"[ERROR] [Car {self.id}] At Node {node.id}: Selected connection {key} but could not find Next Lane object!")
+                    # print(f"[ERROR] [Car {self.id}] At Node {node.id}: Selected connection {key} but could not find Next Lane object!")
                     # Hard fail or Despawn? Despawn to be safe
                     self.alive = False
             else:
                 # Dead End (e.g. edge of map)
-                print(f"[WARN] [Car {self.id}] Despawning at Node {node.id} (Lane {self.current_lane.id} has no outlets).")
+                # print(f"[WARN] [Car {self.id}] Despawning at Node {node.id} (Lane {self.current_lane.id} has no outlets).")
                 self.alive = False
 
     def render_debug(self, renderer, camera):

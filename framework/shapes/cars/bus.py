@@ -1,5 +1,5 @@
 from pyglm import glm
-from project.vehicle import BaseVehicle
+from framework.shapes.cars.vehicle import BaseVehicle
 
 class Bus(BaseVehicle):
     def create_geometry(self):

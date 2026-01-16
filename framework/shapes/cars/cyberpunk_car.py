@@ -1,5 +1,5 @@
 from pyglm import glm
-from project.vehicle import BaseVehicle
+from framework.shapes.cars.vehicle import BaseVehicle
 from framework.shapes import Cube, Cylinder
 from framework.shapes.trapezoid import Trapezoid
 from framework.objects import MeshObject

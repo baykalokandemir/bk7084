@@ -30,6 +30,9 @@ def get_materials():
     return body, wheel, glass, glow
 
 class BaseVehicle(Object):
+    # Static cache for geometry to prevent redundant VAO creation
+    _geometry_cache = {}
+
     def __init__(self, transform=glm.mat4(1.0)):
         super().__init__(transform)
         self.parts = []
@@ -44,8 +47,21 @@ class BaseVehicle(Object):
             part.transform = self.transform * part.local_transform
             part.draw(camera, lights)
             
+    def _get_cached_shape(self, key, factory_func):
+        if key not in BaseVehicle._geometry_cache:
+            mesh = factory_func()
+            mesh.createGeometry()
+            mesh.createBuffers()
+            BaseVehicle._geometry_cache[key] = mesh
+        return BaseVehicle._geometry_cache[key]
+
     def add_box(self, color, size, pos, mat):
-        mesh = Cube(color=color, side_length=1.0)
+        # Cache Key: (Type, Color)
+        # We use a unit cube, size is applied via transform
+        key = ("cube", tuple(color))
+        
+        mesh = self._get_cached_shape(key, lambda: Cube(color=color, side_length=1.0))
+
         s = glm.scale(size)
         t = glm.translate(pos)
         obj = MeshObject(mesh, mat, t * s)
@@ -53,7 +69,11 @@ class BaseVehicle(Object):
         self.parts.append(obj)
 
     def add_trap(self, color, size, pos, taper, mat):
-        mesh = Trapezoid(color=color, side_length=1.0, taper_ratio=taper)
+        # Cache Key: (Type, Color, Taper)
+        key = ("trap", tuple(color), taper)
+        
+        mesh = self._get_cached_shape(key, lambda: Trapezoid(color=color, side_length=1.0, taper_ratio=taper))
+        
         s = glm.scale(size)
         t = glm.translate(pos)
         obj = MeshObject(mesh, mat, t * s)
@@ -61,7 +81,13 @@ class BaseVehicle(Object):
         self.parts.append(obj)
 
     def add_wheel(self, radius, width, pos):
-        mesh = Cylinder(radius=radius, height=width, segments=16, color=glm.vec4(0.2, 0.2, 0.2, 1.0))
+        # Cache Key: (Type, Radius, Width, Color)
+        # Cylinder geometry depends on radius/height(width)
+        c = glm.vec4(0.2, 0.2, 0.2, 1.0)
+        key = ("wheel", radius, width, tuple(c))
+        
+        mesh = self._get_cached_shape(key, lambda: Cylinder(radius=radius, height=width, segments=16, color=c))
+
         rot = glm.rotate(glm.radians(90), glm.vec3(0, 0, 1))
         t = glm.translate(pos)
         obj = MeshObject(mesh, self.wheel_mat, t * rot)

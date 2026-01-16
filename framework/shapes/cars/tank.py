@@ -1,5 +1,5 @@
 from pyglm import glm
-from project.vehicle import BaseVehicle
+from framework.shapes.cars.vehicle import BaseVehicle
 from framework.shapes import Cylinder
 from framework.objects import MeshObject
 
