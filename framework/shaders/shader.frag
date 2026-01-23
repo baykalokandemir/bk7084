@@ -46,28 +46,41 @@ void main()
     vec3 result = base_color * ambient_strength;
 
     for (int lid = 0; lid < light_count; ++lid) {
-        float distance = length(light_position[lid].xyz - frag_pos.xyz);
-        vec3 L = normalize(light_position[lid].xyz - frag_pos.xyz);
-        vec3 lightCol = light_color[lid].rgb;
-
-        // Default: Sun (lid == 0) -> No attenuation, Omni-directional
+        // w=0 -> Directional (Sun/Moon), w=1 -> Point
+        bool isDirectional = (light_position[lid].w < 0.5);
+        
+        vec3 lightCol = light_color[lid].rgb; // [FIX] Restore
+        vec3 L;
         float attenuation = 1.0;
         float spotEffect = 1.0;
 
-        if (lid > 0) {
-            // Street Lights: Attenuation + Downward Spotlight
-            
-            // 1. Attenuation
-            attenuation = 1.0 / (1.0 + 0.1 * distance + 0.05 * distance * distance);
-            
-            // 2. Spotlight (Downwards)
-            vec3 spotDir = vec3(0.0, -1.0, 0.0);
-            // Vector from light to frag is -L
-            float theta = dot(-L, spotDir);
-            float cutOff = 0.5; // Cos value (approx 60 degrees)
-            float outerCutOff = 0.3; // Soft edge
-            
-            spotEffect = smoothstep(outerCutOff, cutOff, theta);
+        if (isDirectional) {
+             // Directional Light: Position is actually Direction
+             // We want vector TO light. 
+             // If light_position is 'direction of light' (from sun to earth), L should be -direction.
+             // Usually directional light structure stores direction vector.
+             L = normalize(-light_position[lid].xyz);
+        } else {
+             // Point Light
+             L = normalize(light_position[lid].xyz - frag_pos.xyz);
+             float distance = length(light_position[lid].xyz - frag_pos.xyz);
+             
+             if (lid > 0) { // Keep street light logic for point lights > 0... 
+                 // Actually relying on lid > 0 is risky if Sun is not 0.
+                 // But for now, we assume standard point lights are street lights.
+                 // Ideally we should use another uniform or property.
+                 
+                 // 1. Attenuation
+                 attenuation = 1.0 / (1.0 + 0.1 * distance + 0.05 * distance * distance);
+
+                 // 2. Spotlight (Downwards) - ONLY if it acts like a street lamp
+                 // Hardcoded logic for now as requested by user previously to keep it simple
+                 vec3 spotDir = vec3(0.0, -1.0, 0.0);
+                 float theta = dot(-L, spotDir);
+                 float cutOff = 0.5; 
+                 float outerCutOff = 0.3; 
+                 spotEffect = smoothstep(outerCutOff, cutOff, theta);
+             }
         }
 
         float diff = max(dot(N, L), 0.0);
