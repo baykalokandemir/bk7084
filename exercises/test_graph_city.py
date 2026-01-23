@@ -71,6 +71,7 @@ def main():
     city_mesh_obj = None
     building_mesh_obj = None
     debug_mesh_obj = None
+    signal_mesh_obj = None # [NEW] Dynamic Traffic Lights
     crash_shape = None # [NEW] Shared Geometry
 
     # [NEW] Agent State
@@ -146,7 +147,7 @@ def main():
             print(f"DEBUG: [Car {a1.id}] crashed into [Car {a2.id}] at {midpoint}.")
 
     def regenerate():
-        nonlocal current_objects, city_mesh_obj, building_mesh_obj, debug_mesh_obj, agents, city_gen, crash_shape
+        nonlocal current_objects, city_mesh_obj, building_mesh_obj, debug_mesh_obj, signal_mesh_obj, agents, city_gen, crash_shape
 
         
         # Clear old objects
@@ -157,7 +158,10 @@ def main():
         city_mesh_obj = None
         building_mesh_obj = None
         building_mesh_obj = None
+        building_mesh_obj = None
+        building_mesh_obj = None
         debug_mesh_obj = None
+        signal_mesh_obj = None
         crash_events = [] # Clear crashes on regen
         total_crashes[0] = 0
         
@@ -338,8 +342,33 @@ def main():
         for node in city_gen.graph.nodes:
             node.update(0.016)
             
+            
         for agent in agents:
             agent.update(0.016)
+            
+        # [NEW] Phase 2: Render Dynamic Signals
+        # 1. Generate Shape
+        signal_shape = mesh_gen.generate_dynamic_signals(city_gen.graph)
+        
+        # 2. Update Mesh Object (Swap)
+        if signal_mesh_obj:
+            if signal_mesh_obj in glrenderer.objects:
+                glrenderer.objects.remove(signal_mesh_obj)
+            if signal_mesh_obj in current_objects:
+                current_objects.remove(signal_mesh_obj)
+                
+        if len(signal_shape.vertices) > 0:
+            # Unlit material
+            mat = Material()
+            mat.uniforms = {"ambientStrength": 1.0, "diffuseStrength": 0.0, "specularStrength": 0.0}
+            
+            signal_mesh_obj = MeshObject(signal_shape, mat)
+            signal_mesh_obj.draw_mode = gl.GL_LINES
+            
+            glrenderer.addObject(signal_mesh_obj)
+            current_objects.append(signal_mesh_obj)
+        else:
+            signal_mesh_obj = None
             
         # 3. Detect Crashes
         detect_crashes(agents)
