@@ -75,6 +75,7 @@ def main():
     # [NEW] Agent State
     agents = []
     target_agent_count = [1] # List for ImGui (mutable)
+    num_cars_to_brake = [5] # [NEW] GUI State
 
     def regenerate():
         nonlocal current_objects, city_mesh_obj, building_mesh_obj, debug_mesh_obj, agents, city_gen
@@ -281,6 +282,26 @@ def main():
         if imgui.button("Regenerate"):
             regenerate()
             
+        _, num_cars_to_brake[0] = imgui.input_int("Num to Brake", num_cars_to_brake[0])
+        if imgui.button("Brake Random Cars"):
+            # Select N random cars and set manual_brake = True
+            count = min(num_cars_to_brake[0], len(agents))
+            if count > 0:
+                candidates = [a for a in agents if not a.manual_brake]
+                if len(candidates) < count:
+                    targets = candidates # Brake all available
+                else:
+                    targets = random.sample(candidates, count)
+                
+                for t in targets:
+                    t.manual_brake = True
+                print(f"[USER] Manually braked {len(targets)} cars.")
+        
+        if imgui.button("Release All"):
+            for a in agents:
+                a.manual_brake = False
+            print("[USER] Released all manual brakes.")
+
         _, target_agent_count[0] = imgui.slider_int("Car Count", target_agent_count[0], 0, 50)
         imgui.separator()
             

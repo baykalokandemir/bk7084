@@ -16,8 +16,10 @@ class CarAgent:
         CarAgent._id_counter += 1
         
         self.current_lane = start_lane
+        self.register_on_lane(self.current_lane) # [NEW] Register immediately
         self.current_curve = None # List of points if turning
-        self.speed = 15.0 # Units/sec
+        self.max_speed = 15.0
+        self.speed = self.max_speed # Units/sec
         
         # Determine initial path
         self.path = self.current_lane.waypoints
@@ -37,6 +39,9 @@ class CarAgent:
         self.last_position = glm.vec3(self.position)
         self.time_since_last_move = 0.0
         self.alive = True # [NEW] Signal for removal
+        self.debug_stop_index = -1 # [NEW] Stop at specific waypoint index
+        self.manual_brake = False # [NEW] Stopped via GUI
+        self.blocked_by_id = None # [NEW] To avoid spamming debug prints
 
         # Visuals
         # Create a dedicated MeshObject for this agent
@@ -63,12 +68,64 @@ class CarAgent:
 
     def update(self, dt):
         if not self.alive: return # Don't update dead agents
+        
+        # Check if we should debug stop
+        should_debug_stop = self.manual_brake or (self.debug_stop_index != -1 and self.target_index >= self.debug_stop_index)
+
+        # --- [NEW] Braking Logic ---
+        # Only check if we are on a lane
+        blocked = False
+        blocking_car_id = None
+
+        if self.current_lane:
+            # Check other agents on this lane
+            for other in self.current_lane.active_agents:
+                if other is self: continue
+                if not other.alive: continue
+                
+                # Simple Logic: Is he ahead of me?
+                # We use target_index as a rough proxy for progress along the path.
+                # If target_index is higher, he is ahead.
+                # If equal, check distance to that target.
+                
+                is_ahead = False
+                if other.target_index > self.target_index:
+                    is_ahead = True
+                    # Edge case: If he is WAY ahead (index + 20), we don't care? 
+                    # For now, check Euclidean dist first.
+                elif other.target_index == self.target_index:
+                    # Both aiming for same point. Who is closer?
+                    d_me = glm.distance(self.position, self.path[self.target_index])
+                    d_him = glm.distance(other.position, other.path[other.target_index])
+                    if d_him < d_me:
+                        is_ahead = True
+                        
+                if is_ahead:
+                    dist = glm.distance(self.position, other.position)
+                    if dist < 4.0: # [TUNING] Safety Distance
+                        blocked = True
+                        blocking_car_id = other.id
+                        break
+        
+        if should_debug_stop:
+             self.speed = 0.0
+        elif blocked:
+            self.speed = 0.0
+            if self.blocked_by_id != blocking_car_id:
+                print(f"[DEBUG] [Car {self.id}] has braked behind [Car {blocking_car_id}]")
+                self.blocked_by_id = blocking_car_id
+        else:
+            self.speed = self.max_speed
+            self.blocked_by_id = None
+        
+        # ---------------------------
 
         # Stuck Check
-        if glm.distance(self.position, self.last_position) < 0.01:
+        # Skip stuck check if we are intentionally stopped
+        if not should_debug_stop and glm.distance(self.position, self.last_position) < 0.01:
             self.time_since_last_move += dt
             if self.time_since_last_move > 2.0:
-                print(f"[ALERT] [Car {self.id}] Stuck at {self.position}. Target Index: {self.target_index}/{len(self.path) if self.path else 0}")
+                #print(f"[ALERT] [Car {self.id}] Stuck at {self.position}. Target Index: {self.target_index}/{len(self.path) if self.path else 0}")
                 self.time_since_last_move = 0.0 # Reset to avoid spam
         else:
             self.time_since_last_move = 0.0
@@ -105,7 +162,16 @@ class CarAgent:
             self.target_index += 1
             
         # Update Transform
+        # Update Transform
         self._update_transform()
+
+    def register_on_lane(self, lane):
+        if lane and self not in lane.active_agents:
+            lane.active_agents.append(self)
+
+    def deregister_from_lane(self, lane):
+        if lane and self in lane.active_agents:
+            lane.active_agents.remove(self)
 
     def _update_transform(self):
         # Translate
@@ -133,7 +199,23 @@ class CarAgent:
             # We don't have a direct link "Curve -> Lane" stored easily in Agent?
             # Storing it on State Transition is better.
             
+            self.deregister_from_lane(self.current_lane) # [NEW] Left the lane
             self.current_lane = self.next_lane_after_curve
+            
+            # Note: We don't register on the next lane YET because we are on the curve.
+            # Ideally we register when we actually land on the lane?
+            # BUT: If we are on the curve, the 'Lane' logic doesn't apply.
+            # We are "between lanes".
+            # For simplicity: Register on the new lane immediately so incoming cars see us?
+            # Or wait until we finish the curve.
+            # Let's wait until we finish the curve (next state change) or just accept we are 'ghost' on curve.
+            # Better: Register on the new lane immediately? 
+            # If we do, cars behind start of new lane might break for us even if we are still turning.
+            # Let's register when we finish the curve? 
+            # Oh wait, this block IS finishing the curve. "Finished Turn. Entering Lane".
+            
+            self.register_on_lane(self.current_lane) # [NEW] Entered new lane
+            
             self.current_curve = None
             self.path = self.current_lane.waypoints
             self.target_index = 0
@@ -154,6 +236,7 @@ class CarAgent:
             if not len(node.connections):
                  # No connections at all
                  print(f"[WARN] [Car {self.id}] Despawning at Node {node.id} (No connections).")
+                 self.deregister_from_lane(self.current_lane) # [NEW] Cleanup
                  self.alive = False
                  return
 
@@ -188,15 +271,18 @@ class CarAgent:
                     self.target_index = 0
                     
                     # Do not snap position, curve starts at lane end (roughly)
+                    self.deregister_from_lane(self.current_lane) # [NEW] Leaving lane for curve
                     self.current_lane = None
                     print(f"[DEBUG] [Car {self.id}] At Node {node.id} chose turn to Lane {next_lane.id}. Path Len: {len(self.path)}")
                 else:
                     print(f"[ERROR] [Car {self.id}] At Node {node.id}: Selected connection {key} but could not find Next Lane object!")
                     # Hard fail or Despawn? Despawn to be safe
+                    self.deregister_from_lane(self.current_lane)
                     self.alive = False
             else:
                 # Dead End (e.g. edge of map)
                 print(f"[WARN] [Car {self.id}] Despawning at Node {node.id} (Lane {self.current_lane.id} has no outlets).")
+                self.deregister_from_lane(self.current_lane)
                 self.alive = False
 
     def render_debug(self, renderer, camera):

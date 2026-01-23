@@ -15,6 +15,7 @@ class Lane:
         self.parent_edge = parent_edge
         self.dest_node = dest_node # [NEW] Explicit destination
         self.start_node = parent_edge.start_node if dest_node == parent_edge.end_node else parent_edge.end_node
+        self.active_agents = [] # [NEW] Registry for collision avoidance
 
     def __repr__(self):
         return f"Lane(id={self.id}, dest={self.dest_node.id})"
