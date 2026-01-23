@@ -89,69 +89,6 @@ def main():
     # [NEW] Agent State
     agents = []
     target_agent_count = [1] # List for ImGui (mutable)
-    num_cars_to_brake = [5] # [NEW] GUI State
-    crash_events = [] # [NEW] Phase 3: Store impact positions
-
-    def detect_crashes(active_agents):
-        """
-        Phase 3: Spatial Hash Collision Detection
-        Complexity: O(N) instead of O(N^2)
-        """
-        spatial_grid = {}
-        cell_size = 5.0
-        
-        # 1. Bucket Phase
-        for agent in active_agents:
-            if not agent.alive: continue
-            
-            # Compute Grid Key
-            # We use (x, z) for 2D plane hashing
-            gx = int(agent.position.x // cell_size)
-            gz = int(agent.position.z // cell_size)
-            key = (gx, gz)
-            
-            if key not in spatial_grid:
-                spatial_grid[key] = []
-            spatial_grid[key].append(agent)
-            
-        # 2. Check Phase
-        # We only check collisions within the same bucket for strictness.
-        
-        # Collect deaths to avoid modifying list while iterating or double killing
-        crashes = []
-        
-        for key, cell_agents in spatial_grid.items():
-            if len(cell_agents) < 2: continue
-            
-            # Brute force within cell
-            for i in range(len(cell_agents)):
-                a1 = cell_agents[i]
-                if not a1.alive: continue
-                
-                for j in range(i + 1, len(cell_agents)):
-                    a2 = cell_agents[j]
-                    if not a2.alive: continue
-                    
-                    dist = glm.distance(a1.position, a2.position)
-                    if dist < 2.5: # Collision Threshold
-                        # [FIX] Ignore Parallel Lane False Positives
-                        if a1.current_lane and a2.current_lane and a1.current_lane != a2.current_lane:
-                            if hasattr(a1.current_lane, 'parent_edge') and hasattr(a2.current_lane, 'parent_edge'):
-                                if a1.current_lane.parent_edge == a2.current_lane.parent_edge:
-                                    continue 
-
-                        crashes.append((a1, a2))
-        
-        # 3. Resolve
-        for a1, a2 in crashes:
-            if not a1.alive or not a2.alive: continue # Already processed
-            
-            a1.alive = False
-            a2.alive = False
-            midpoint = (a1.position + a2.position) * 0.5
-            crash_events.append(midpoint)
-            
-            print(f"DEBUG: [Car {a1.id}] crashed into [Car {a2.id}] at {midpoint}.")
 
     def regenerate():
         nonlocal current_objects, city_mesh_obj, building_mesh_obj, debug_mesh_obj, agents, city_gen
@@ -330,31 +267,7 @@ def main():
         
         # [NEW] Skybox
         skybox.update(0.016)
-            
-        # 3. Detect Crashes
-        detect_crashes(agents)
-        
-        # [NEW] Phase 4: Render Crashes
-        if crash_events:
-            for pos in crash_events:
-                # Create visual marker
-                cube = Cube(side_length=2.5, color=glm.vec4(1.0, 0.0, 0.0, 1.0))
-                cube.createGeometry()
-                
-                # Glowing Material
-                mat = Material()
-                mat.uniforms = {"ambient_strength": 1.0, "diffuse_strength": 0.0, "specular_strength": 0.0}
-                
-                crash_obj = MeshObject(cube, mat)
-                crash_obj.transform = glm.translate(pos)
-                
-                glrenderer.addObject(crash_obj)
-                current_objects.append(crash_obj)
-            
-            # Clear events so we don't re-process
-            crash_events.clear()
 
-        # 4. Cleanup Dead Agents
         # Iterate copy or use list comprehension to filter
         alive_agents = []
         for agent in agents:
@@ -388,26 +301,6 @@ def main():
             
         if imgui.button("Regenerate"):
             regenerate()
-            
-        _, num_cars_to_brake[0] = imgui.input_int("Num to Brake", num_cars_to_brake[0])
-        if imgui.button("Brake Random Cars"):
-            # Select N random cars and set manual_brake = True
-            count = min(num_cars_to_brake[0], len(agents))
-            if count > 0:
-                candidates = [a for a in agents if not a.manual_brake and not a.is_reckless] 
-                if len(candidates) < count:
-                    targets = candidates # Brake all available
-                else:
-                    targets = random.sample(candidates, count)
-                
-                for t in targets:
-                    t.manual_brake = True
-                print(f"[USER] Manually braked {len(targets)} cars.")
-        
-        if imgui.button("Release All"):
-            for a in agents:
-                a.manual_brake = False
-            print("[USER] Released all manual brakes.")
 
         _, target_agent_count[0] = imgui.slider_int("Car Count", target_agent_count[0], 0, 50)
         imgui.separator()
