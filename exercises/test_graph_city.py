@@ -315,6 +315,26 @@ def main():
             
         # 3. Detect Crashes
         detect_crashes(agents)
+        
+        # [NEW] Phase 4: Render Crashes
+        if crash_events:
+            for pos in crash_events:
+                # Create visual marker
+                cube = Cube(side_length=2.5, color=glm.vec4(1.0, 0.0, 0.0, 1.0))
+                cube.createGeometry()
+                
+                # Glowing Material
+                mat = Material()
+                mat.uniforms = {"ambientStrength": 1.0, "diffuseStrength": 0.0, "specularStrength": 0.0}
+                
+                crash_obj = MeshObject(cube, mat)
+                crash_obj.transform = glm.translate(pos)
+                
+                glrenderer.addObject(crash_obj)
+                current_objects.append(crash_obj)
+            
+            # Clear events so we don't re-process
+            crash_events.clear()
             
         # 4. Cleanup Dead Agents
         # Iterate copy or use list comprehension to filter
@@ -356,7 +376,7 @@ def main():
             # Select N random cars and set manual_brake = True
             count = min(num_cars_to_brake[0], len(agents))
             if count > 0:
-                candidates = [a for a in agents if not a.manual_brake]
+                candidates = [a for a in agents if not a.manual_brake and not a.is_reckless] # [FIX] Don't stop reckless drivers
                 if len(candidates) < count:
                     targets = candidates # Brake all available
                 else:

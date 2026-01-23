@@ -51,8 +51,15 @@ class CarAgent:
         # Create a dedicated MeshObject for this agent
         # We share the geometry (Car Shape) but have unique transform (MeshObject)
         if car_shape is None:
-            # Bright Yellow
-            car_shape = Car(body_color=glm.vec4(1.0, 1.0, 0.0, 1.0))
+            # Color Logic
+            if self.is_reckless:
+                # Orange for Reckless
+                body_color = glm.vec4(1.0, 0.5, 0.0, 1.0)
+            else:
+                # Bright Yellow for Normal
+                body_color = glm.vec4(1.0, 1.0, 0.0, 1.0)
+                
+            car_shape = Car(body_color=body_color)
             car_shape.createGeometry()
             
         self.mesh_object = MeshObject(car_shape, Material())
