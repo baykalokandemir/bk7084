@@ -42,6 +42,10 @@ class CarAgent:
         self.debug_stop_index = -1 # [NEW] Stop at specific waypoint index
         self.manual_brake = False # [NEW] Stopped via GUI
         self.blocked_by_id = None # [NEW] To avoid spamming debug prints
+        
+        # [NEW] Phase 3: Reckless Driver
+        # 20% chance to be reckless (ignores braking for other cars)
+        self.is_reckless = (random.random() < 0.2)
 
         # Visuals
         # Create a dedicated MeshObject for this agent
@@ -77,7 +81,8 @@ class CarAgent:
         blocked = False
         blocking_car_id = None
 
-        if self.current_lane:
+        # Reckless drivers IGNORE traffic (but still respect manual/debug stops)
+        if self.current_lane and not self.is_reckless:
             # Check other agents on this lane
             for other in self.current_lane.active_agents:
                 if other is self: continue

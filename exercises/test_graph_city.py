@@ -76,6 +76,70 @@ def main():
     agents = []
     target_agent_count = [1] # List for ImGui (mutable)
     num_cars_to_brake = [5] # [NEW] GUI State
+    crash_events = [] # [NEW] Phase 3: Store impact positions
+
+    def detect_crashes(active_agents):
+        """
+        Phase 3: Spatial Hash Collision Detection
+        Complexity: O(N) instead of O(N^2)
+        """
+        spatial_grid = {}
+        cell_size = 5.0
+        
+        # 1. Bucket Phase
+        for agent in active_agents:
+            if not agent.alive: continue
+            
+            # Compute Grid Key
+            # We use (x, z) for 2D plane hashing
+            gx = int(agent.position.x // cell_size)
+            gz = int(agent.position.z // cell_size)
+            key = (gx, gz)
+            
+            if key not in spatial_grid:
+                spatial_grid[key] = []
+            spatial_grid[key].append(agent)
+            
+        # 2. Check Phase
+        # We only check collisions within the same bucket for strictness.
+        # (Technically should check neighbors for edge cases, but strict bucket is fine for now)
+        
+        # Collect deaths to avoid modifying list while iterating or double killing
+        crashes = []
+        
+        for key, cell_agents in spatial_grid.items():
+            if len(cell_agents) < 2: continue
+            
+            # Brute force within cell
+            for i in range(len(cell_agents)):
+                a1 = cell_agents[i]
+                if not a1.alive: continue
+                
+                for j in range(i + 1, len(cell_agents)):
+                    a2 = cell_agents[j]
+                    if not a2.alive: continue
+                    
+                    dist = glm.distance(a1.position, a2.position)
+                    if dist < 2.5: # Collision Threshold
+                        # [FIX] Ignore Parallel Lane False Positives
+                        # If agents are on the same road (Edge) but different lanes, we assume they are safe side-by-side.
+                        if a1.current_lane and a2.current_lane and a1.current_lane != a2.current_lane:
+                            if hasattr(a1.current_lane, 'parent_edge') and hasattr(a2.current_lane, 'parent_edge'):
+                                if a1.current_lane.parent_edge == a2.current_lane.parent_edge:
+                                    continue 
+
+                        crashes.append((a1, a2))
+        
+        # 3. Resolve
+        for a1, a2 in crashes:
+            if not a1.alive or not a2.alive: continue # Already processed
+            
+            a1.alive = False
+            a2.alive = False
+            midpoint = (a1.position + a2.position) * 0.5
+            crash_events.append(midpoint)
+            
+            print(f"DEBUG: [Car {a1.id}] crashed into [Car {a2.id}] at {midpoint}.")
 
     def regenerate():
         nonlocal current_objects, city_mesh_obj, building_mesh_obj, debug_mesh_obj, agents, city_gen
@@ -87,7 +151,9 @@ def main():
         current_objects = []
         city_mesh_obj = None
         building_mesh_obj = None
+        building_mesh_obj = None
         debug_mesh_obj = None
+        crash_events = [] # Clear crashes on regen
 
         # Clear Agents
         for agent in agents:
@@ -247,7 +313,10 @@ def main():
         for agent in agents:
             agent.update(0.016)
             
-        # 3. Cleanup Dead Agents
+        # 3. Detect Crashes
+        detect_crashes(agents)
+            
+        # 4. Cleanup Dead Agents
         # Iterate copy or use list comprehension to filter
         alive_agents = []
         for agent in agents:

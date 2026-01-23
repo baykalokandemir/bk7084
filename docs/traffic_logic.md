@@ -31,3 +31,21 @@ Every frame, `CarAgent.update()`:
 - Agents on curves do not check for collisions (yet).
 - Agents entering a new lane from a curve might "ghost" into an existing car if the gap is small (though they will register and brake once they are fully on the lane).
 - Intersection logic is purely random and does not check for cross-traffic.
+
+## Phase 3: Crash System
+
+### Reckless Drivers
+To simulate human error, `CarAgent` now has a property `is_reckless` (20% chance on spawn).
+- **Behavior**: Reckless drivers **completely ignore** the braking logic triggered by cars ahead of them in the Lane Registry. They will drive through other cars, causing collisions.
+
+### Collision Detection (Spatial Hashing)
+To correctly detect impacts, we implemented a broad-phase collision system using **Spatial Hashing**.
+- **Algorithm**:
+    1.  **Grid**: The world is divided into strict cells of size **5.0 units**.
+    2.  **Bucketing**: Each frame, every active agent is hashed into a bucket based on its `(x, z)` position.
+    3.  **Check**: We iterate through each bucket. If a bucket has >1 agents, we check distance between them.
+    4.  **Collision**: If distance < **2.5 units**, a crash is registered.
+- **Resolution**:
+    - Both agents are marked as dead (`alive = False`).
+    - The crash coordinate (midpoint) is stored in `crash_events` for future visualization.
+
