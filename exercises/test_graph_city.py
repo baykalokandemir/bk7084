@@ -71,11 +71,13 @@ def main():
     city_mesh_obj = None
     building_mesh_obj = None
     debug_mesh_obj = None
+    crash_shape = None # [NEW] Shared Geometry
 
     # [NEW] Agent State
     agents = []
     target_agent_count = [1] # List for ImGui (mutable)
     num_cars_to_brake = [5] # [NEW] GUI State
+    reckless_chance = [0.2] # [NEW] Phase 5: GUI Control
     crash_events = [] # [NEW] Phase 3: Store impact positions
 
     def detect_crashes(active_agents):
@@ -228,6 +230,11 @@ def main():
             glrenderer.addObject(debug_mesh_obj)
             current_objects.append(debug_mesh_obj)
         
+        # [NEW] Phase 5 Optimization: Shared Crash Shape
+        nonlocal crash_shape
+        crash_shape = Cube(side_length=2.5, color=glm.vec4(1.0, 0.0, 0.0, 1.0))
+        crash_shape.createGeometry()
+        
         # 5. [NEW] Visualize Auditor Failures (Red Cubes)
         if hasattr(city_gen, 'dead_end_lanes') and city_gen.dead_end_lanes:
             batcher_fails = MeshBatcher()
@@ -301,7 +308,10 @@ def main():
                 edge = random.choice(city_gen.graph.edges)
                 if hasattr(edge, 'lanes') and edge.lanes:
                     lane = random.choice(edge.lanes)
-                    ag = CarAgent(lane)
+                    
+                    # [NEW] Phase 5: Reckless Logic
+                    is_reckless = (random.random() < reckless_chance[0])
+                    ag = CarAgent(lane, is_reckless=is_reckless)
                     
                     # Random color tweak?
                     # ag.mesh_object.material.uniforms['color'] = ... (Need shader support)
@@ -318,20 +328,22 @@ def main():
         
         # [NEW] Phase 4: Render Crashes
         if crash_events:
+            if crash_shape is None:
+                 # Init if not ready (e.g. if regenerate called before)
+                 pass # Assumed init in regenerate
+                 
             for pos in crash_events:
-                # Create visual marker
-                cube = Cube(side_length=2.5, color=glm.vec4(1.0, 0.0, 0.0, 1.0))
-                cube.createGeometry()
-                
-                # Glowing Material
-                mat = Material()
-                mat.uniforms = {"ambientStrength": 1.0, "diffuseStrength": 0.0, "specularStrength": 0.0}
-                
-                crash_obj = MeshObject(cube, mat)
-                crash_obj.transform = glm.translate(pos)
-                
-                glrenderer.addObject(crash_obj)
-                current_objects.append(crash_obj)
+                # [OPTIMIZED] Reuse geometry
+                if crash_shape:
+                    # Glowing Material
+                    mat = Material()
+                    mat.uniforms = {"ambientStrength": 1.0, "diffuseStrength": 0.0, "specularStrength": 0.0}
+                    
+                    crash_obj = MeshObject(crash_shape, mat)
+                    crash_obj.transform = glm.translate(pos)
+                    
+                    glrenderer.addObject(crash_obj)
+                    current_objects.append(crash_obj)
             
             # Clear events so we don't re-process
             crash_events.clear()
@@ -390,6 +402,21 @@ def main():
             for a in agents:
                 a.manual_brake = False
             print("[USER] Released all manual brakes.")
+            
+        _, reckless_chance[0] = imgui.slider_float("Reckless %", reckless_chance[0], 0.0, 1.0)
+        
+        if imgui.button("Clear Wrecks"):
+             # Remove objects that use crash_shape
+             to_remove = []
+             for obj in current_objects:
+                 if obj.mesh == crash_shape:
+                     to_remove.append(obj)
+             
+             for obj in to_remove:
+                 if obj in glrenderer.objects:
+                     glrenderer.objects.remove(obj)
+                 current_objects.remove(obj)
+             print(f"[USER] Cleared {len(to_remove)} wrecks.")
 
         _, target_agent_count[0] = imgui.slider_int("Car Count", target_agent_count[0], 0, 50)
         imgui.separator()

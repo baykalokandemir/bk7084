@@ -11,7 +11,7 @@ class CarAgent:
     debug_sphere_mesh = None
     _id_counter = 0 # [NEW] Identity Persistence
 
-    def __init__(self, start_lane, car_shape=None):
+    def __init__(self, start_lane, car_shape=None, is_reckless=False):
         self.id = CarAgent._id_counter
         CarAgent._id_counter += 1
         
@@ -44,8 +44,7 @@ class CarAgent:
         self.blocked_by_id = None # [NEW] To avoid spamming debug prints
         
         # [NEW] Phase 3: Reckless Driver
-        # 20% chance to be reckless (ignores braking for other cars)
-        self.is_reckless = (random.random() < 0.2)
+        self.is_reckless = is_reckless
 
         # Visuals
         # Create a dedicated MeshObject for this agent
