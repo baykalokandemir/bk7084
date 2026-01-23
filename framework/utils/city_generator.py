@@ -88,7 +88,7 @@ class CityGenerator:
 
         print(f"DEBUG: Graph Built. Nodes: {len(self.graph.nodes)} (Merged from raw endpoints). Edges: {edges_created}")
 
-    def audit_graph(self):
+    def audit_graph(self, print_no_outlet=False):
         print("DEBUG: Auditing Graph Connectivity...")
         self.dead_end_lanes = []
         loop_count = 0
@@ -147,12 +147,14 @@ class CityGenerator:
                     self.dead_end_lanes.append(lane)
                     
         print(f"[AUDIT] Found {len(self.dead_end_lanes)} lanes with no outlets.")
+    
         if loop_count > 0:
             print(f"[AUDIT] Found {loop_count} zero-length loop edges.")
             
         # Log first few
-        for i, lane in enumerate(self.dead_end_lanes[:5]):
-            print(f"[FAIL] Lane {lane.id} has no outlets.")
+        if (print_no_outlet):
+            for i, lane in enumerate(self.dead_end_lanes):
+                print(f"[FAIL] Lane {lane.id} has no outlets.")
 
     def generate_buildings(self):
         """

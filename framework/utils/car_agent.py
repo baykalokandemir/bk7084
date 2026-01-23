@@ -76,7 +76,7 @@ class CarAgent:
              mat.uniforms = { "ambientStrength": 1.0, "diffuseStrength": 0.0, "specularStrength": 0.0 }
              CarAgent.debug_sphere_mesh = MeshObject(sphere, mat)
 
-    def update(self, dt):
+    def update(self, dt, print_stuck_debug=False, print_despawn_debug=False):
         if not self.alive: return # Don't update dead agents
         
         # Check if we should debug stop
@@ -120,30 +120,63 @@ class CarAgent:
         
         if should_debug_stop:
              self.speed = 0.0
-        elif blocked:
-            self.speed = 0.0
-            if self.blocked_by_id != blocking_car_id:
-                # print(f"[DEBUG] [Car {self.id}] has braked behind [Car {blocking_car_id}]")
-                self.blocked_by_id = blocking_car_id
         else:
-            self.speed = self.max_speed
-            self.blocked_by_id = None
+             # Combined Braking Logic
+             
+             # 1. Traffic Signal Check
+             signal_stop = False
+             
+             # Only check signals if we are near the end of a lane (approaching intersection)
+             # Optimization: Don't check if we are already in a curve (current_lane is None)
+             if self.current_lane and self.path:
+                 # Check distance to end of path (approx dist to node)
+                 # Fast approximation: Are we targeting the last waypoint?
+                 if self.target_index >= len(self.path) - 1:
+                     dist_to_end = glm.distance(self.position, self.path[-1])
+                     if dist_to_end < 15.0: # [TUNING] Stopping Distance for Light
+                         # Query Signal
+                         node = self.current_lane.dest_node
+                         signal = node.get_signal(self.current_lane.id)
+                         
+                         if signal == "RED":
+                             if self.is_reckless and random.random() < 0.5:
+                                 pass # Run it!
+                             else:
+                                 signal_stop = True
+                         elif signal == "YELLOW":
+                             if self.is_reckless:
+                                 self.speed = 25.0 # Speed up!
+                             else:
+                                 signal_stop = True
+             
+             # 2. Apply Speed
+             if signal_stop or blocked:
+                 self.speed = 0.0
+                 if blocked and self.blocked_by_id != blocking_car_id:
+                     self.blocked_by_id = blocking_car_id
+             else:
+                 # Restore speed if not blocked and no red light
+                 # (Keep high speed if reckless yellow)
+                 if not (self.is_reckless and self.speed > 20.0):
+                     self.speed = self.max_speed
+                 self.blocked_by_id = None
         
         # ---------------------------
 
         # Stuck Check
         # Skip stuck check if we are intentionally stopped
-        if not should_debug_stop and glm.distance(self.position, self.last_position) < 0.01:
+        if not (should_debug_stop or signal_stop or blocked) and glm.distance(self.position, self.last_position) < 0.01:
             self.time_since_last_move += dt
             if self.time_since_last_move > 2.0:
-                #print(f"[ALERT] [Car {self.id}] Stuck at {self.position}. Target Index: {self.target_index}/{len(self.path) if self.path else 0}")
+                if (print_stuck_debug):
+                    print(f"[ALERT] [Car {self.id}] Stuck at {self.position}. Target Index: {self.target_index}/{len(self.path) if self.path else 0}")
                 self.time_since_last_move = 0.0 # Reset to avoid spam
         else:
             self.time_since_last_move = 0.0
             self.last_position = glm.vec3(self.position)
 
         if not self.path or self.target_index >= len(self.path):
-            self.pick_next_path()
+            self.pick_next_path(print_despawn_debug=print_despawn_debug)
             if not self.alive: return
             return
 
@@ -201,7 +234,7 @@ class CarAgent:
         
         self.mesh_object.transform = mat * rot * scale
 
-    def pick_next_path(self):
+    def pick_next_path(self, print_despawn_debug=False):
         # We reached end of current path
         
         if self.current_curve:
@@ -246,7 +279,8 @@ class CarAgent:
             
             if not len(node.connections):
                  # No connections at all
-                 print(f"[WARN] [Car {self.id}] Despawning at Node {node.id} (No connections).")
+                 if (print_despawn_debug):
+                     print(f"[WARN] [Car {self.id}] Despawning at Node {node.id} (No connections).")
                  self.deregister_from_lane(self.current_lane) # [NEW] Cleanup
                  self.alive = False
                  return

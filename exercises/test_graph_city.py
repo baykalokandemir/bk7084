@@ -65,7 +65,10 @@ def main():
     
     # Toggle State
     show_buildings = [False] 
-    
+    crash_debug = False
+    print_stuck_debug=False
+    print_despawn_debug=False
+
     # Store explicit references
     current_objects = []
     city_mesh_obj = None
@@ -144,7 +147,8 @@ def main():
             crash_events.append(midpoint)
             total_crashes[0] += 1
             
-            print(f"DEBUG: [Car {a1.id}] crashed into [Car {a2.id}] at {midpoint}.")
+            if (crash_debug):
+                print(f"DEBUG: [Car {a1.id}] crashed into [Car {a2.id}] at {midpoint}.")
 
     def regenerate():
         nonlocal current_objects, city_mesh_obj, building_mesh_obj, debug_mesh_obj, signal_mesh_obj, agents, city_gen, crash_shape
@@ -344,7 +348,7 @@ def main():
             
             
         for agent in agents:
-            agent.update(0.016)
+            agent.update(0.016, print_stuck_debug, print_despawn_debug)
             
         # [NEW] Phase 2: Render Dynamic Signals
         # 1. Generate Shape
@@ -471,6 +475,9 @@ def main():
         imgui.separator()
             
         _, show_buildings[0] = imgui.checkbox("Show Buildings", show_buildings[0])
+        _, crash_debug = imgui.checkbox("Crash Debug", crash_debug)
+        _, print_stuck_debug = imgui.checkbox("Print Stuck Debug", print_stuck_debug)
+        _, print_despawn_debug = imgui.checkbox("Print Despawn Debug", print_despawn_debug)
             
         imgui.text(f"Nodes: {len(city_gen.graph.nodes)}")
         imgui.text(f"Edges: {len(city_gen.graph.edges)}")

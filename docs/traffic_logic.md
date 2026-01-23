@@ -49,3 +49,27 @@ To correctly detect impacts, we implemented a broad-phase collision system using
     - Both agents are marked as dead (`alive = False`).
     - The crash coordinate (midpoint) is stored in `crash_events` for future visualization.
 
+## Phase 4: Traffic Lights
+
+### Logic (Phase 1)
+Traffic lights are implemented at the `Node` level.
+- **State Machine**: Each node cycles through `GREEN` (5s) -> `YELLOW` (2s) -> `RED` (1s).
+- **Phasing**: The `Node` groups incoming lanes into opposing pairs (North/South vs East/West) to ensure non-conflicting traffic flow.
+- **Randomization**: Start times are randomized to prevent global synchronization.
+
+### Visuals (Phase 2)
+We split rendering into Static and Dynamic passes within `MeshGenerator`.
+- **Static**: Road lanes are white lines generated once.
+- **Dynamic**: Intersection curves are regenerated every frame, colored by their `get_signal()` state (Green/Yellow/Red).
+
+### Agent Compliance (Phase 3)
+`CarAgent` respects traffic signals with specific behaviors:
+1.  **Check**: When approaching a `dest_node` (distance < 15.0 units), the agent queries the signal for its current lane.
+2.  **Normal Driver**:
+    - **RED**: Stops immediately (`speed = 0`).
+    - **YELLOW**: Stops immediately.
+    - **GREEN**: Warning: Still brakes for collisions (cars ahead).
+3.  **Reckless Driver**:
+    - **RED**: 50% chance to run the red light.
+    - **YELLOW**: Speeds up to `25.0` to "beat the light".
+

@@ -218,7 +218,7 @@ class Node:
         self.current_phase_index = random.randint(0, len(self.phases) - 1)
         self.phase_timer = random.uniform(0.0, 5.0) # Random offset into the cycle
 
-    def update(self, dt):
+    def update(self, dt, print_debug=False):
         """
         Updates the traffic light phase timer.
         Cycle: GREEN (5s) -> YELLOW (2s) -> RED (1s) -> Next Phase
@@ -241,7 +241,8 @@ class Node:
                 # Next Phase
                 self.current_phase_index = (self.current_phase_index + 1) % len(self.phases)
                 
-            print(f"[DEBUG] Node {self.id} Switch to {self.state}. Phase: {self.current_phase_index}/{len(self.phases)}")
+            if (print_debug):
+                print(f"[DEBUG] Node {self.id} Switch to {self.state}. Phase: {self.current_phase_index}/{len(self.phases)}")
 
     def get_signal(self, lane_id):
         """
