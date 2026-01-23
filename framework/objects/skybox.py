@@ -49,7 +49,9 @@ class Skybox(MeshObject):
         # cos(pi/2) = 0, sin(pi/2) = 1 (Y/Up).
         
         orbit_radius = 1.0
-        sun_dir = glm.vec3(math.cos(angle), math.sin(angle), 0.1) # Slight tilt Z
+        # Reverting to positive sin because previous flip caused Sun to be underground at Noon.
+        # Noon (Angle pi/2): sin=1 => +Y (Up).
+        sun_dir = glm.vec3(math.cos(angle), math.sin(angle), 0.1) 
         sun_dir = glm.normalize(sun_dir)
         
         # Update Lights
