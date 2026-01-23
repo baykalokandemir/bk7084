@@ -81,6 +81,7 @@ class CityGenerator:
         print("DEBUG: Generating Intersection Curves...")
         for node in self.graph.nodes:
             node.generate_connections()
+            node.calculate_phases() # [NEW] Traffic Lights
             
         # 5. [NEW] Audit Graph
         self.audit_graph()

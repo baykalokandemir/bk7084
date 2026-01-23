@@ -1,4 +1,5 @@
 import math
+import random
 from pyglm import glm
 
 class Lane:
@@ -49,6 +50,12 @@ class Node:
         self.edges = []
         # Mapping (from_lane_id, to_lane_id) -> List[vec3] waypoints
         self.connections = {} 
+        
+        # [NEW] Traffic Light State
+        self.phases = [] # List of lists of lane_ids (Simultaneous Green)
+        self.current_phase_index = 0
+        self.phase_timer = 0.0
+        self.state = "RED" # GREEN, YELLOW, RED (Clearance) 
 
     def generate_connections(self):
         """
@@ -140,6 +147,114 @@ class Node:
                 curve = get_bezier_points(p0, p1, p2, p3, steps=8)
                 
                 self.connections[(in_lane.id, out_lane.id)] = curve
+
+    def calculate_phases(self):
+        """
+        Groups incoming lanes into phases based on opposing directions.
+        Called once after graph is built.
+        """
+        self.phases = []
+        
+        # 1. Gather all incoming lanes and their vectors
+        incoming_data = [] # (Lane, Dir)
+        
+        for edge in self.edges:
+            if not hasattr(edge, 'lanes'): continue
+            p1 = glm.vec3(edge.start_node.x, 0, edge.start_node.y)
+            p2 = glm.vec3(edge.end_node.x, 0, edge.end_node.y)
+            dist = glm.distance(p1, p2)
+            if dist < 0.001: continue
+            edge_dir = glm.normalize(p2 - p1)
+            
+            if edge.start_node == self and len(edge.lanes) > 1:
+                 # Incoming is Lane 1 (Backward)
+                 # Edge goes FROM self TO other (p1->p2).
+                 # Lane 1 comes FROM other TO self (p2->p1).
+                 # So direction of incoming traffic is -edge_dir
+                 incoming_data.append((edge.lanes[1], -edge_dir))
+            elif edge.end_node == self and len(edge.lanes) > 0:
+                 # Incoming is Lane 0 (Forward)
+                 # Edge goes FROM other TO self (p1->p2).
+                 # Lane 0 goes FROM other TO self (p1->p2).
+                 # So direction is edge_dir
+                 incoming_data.append((edge.lanes[0], edge_dir))
+                 
+        # 2. Group Opposing Pairs
+        processed = set()
+        
+        for i in range(len(incoming_data)):
+            l1, d1 = incoming_data[i]
+            if l1.id in processed: continue
+            
+            phase_group = [l1.id]
+            processed.add(l1.id)
+            
+            # Find best opposite match
+            best_match = None
+            min_dot = -0.0
+            
+            for j in range(i + 1, len(incoming_data)):
+                l2, d2 = incoming_data[j]
+                if l2.id in processed: continue
+                
+                dot = glm.dot(d1, d2)
+                # Opposite vectors have dot product ~ -1
+                
+                if dot < -0.8: # Roughly Opposite
+                    if dot < min_dot: 
+                         best_match = l2
+                         min_dot = dot
+            
+            if best_match:
+                phase_group.append(best_match.id)
+                processed.add(best_match.id)
+                
+            self.phases.append(phase_group)
+            
+        if not self.phases:
+            self.phases.append([])
+            
+        # [NEW] Randomize Start State
+        self.current_phase_index = random.randint(0, len(self.phases) - 1)
+        self.phase_timer = random.uniform(0.0, 5.0) # Random offset into the cycle
+
+    def update(self, dt):
+        """
+        Updates the traffic light phase timer.
+        Cycle: GREEN (5s) -> YELLOW (2s) -> RED (1s) -> Next Phase
+        """
+        if not self.phases: return
+        
+        self.phase_timer -= dt
+        
+        if self.phase_timer <= 0:
+            # Transition
+            if self.state == "GREEN":
+                self.state = "YELLOW"
+                self.phase_timer = 2.0
+            elif self.state == "YELLOW":
+                self.state = "RED" # Clearance
+                self.phase_timer = 1.0
+            else: # RED or Init
+                self.state = "GREEN"
+                self.phase_timer = 5.0
+                # Next Phase
+                self.current_phase_index = (self.current_phase_index + 1) % len(self.phases)
+                
+            print(f"[DEBUG] Node {self.id} Switch to {self.state}. Phase: {self.current_phase_index}/{len(self.phases)}")
+
+    def get_signal(self, lane_id):
+        """
+        Returns signal state for a given incoming lane ID.
+        """
+        if not self.phases: return "RED"
+        
+        current_phase_lanes = self.phases[self.current_phase_index]
+        
+        if lane_id in current_phase_lanes:
+            return self.state # GREEN or YELLOW
+        else:
+            return "RED"
 
     def add_edge(self, edge):
         if edge not in self.edges:

@@ -334,7 +334,10 @@ def main():
                     agents.append(ag)
                     glrenderer.addObject(ag.mesh_object)
         
-        # 2. Update Agents
+        # 2. Update Simulation (Nodes & Agents)
+        for node in city_gen.graph.nodes:
+            node.update(0.016)
+            
         for agent in agents:
             agent.update(0.016)
             
