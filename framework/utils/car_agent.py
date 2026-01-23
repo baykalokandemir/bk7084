@@ -123,7 +123,7 @@ class CarAgent:
         elif blocked:
             self.speed = 0.0
             if self.blocked_by_id != blocking_car_id:
-                print(f"[DEBUG] [Car {self.id}] has braked behind [Car {blocking_car_id}]")
+                # print(f"[DEBUG] [Car {self.id}] has braked behind [Car {blocking_car_id}]")
                 self.blocked_by_id = blocking_car_id
         else:
             self.speed = self.max_speed
@@ -284,7 +284,7 @@ class CarAgent:
                     # Do not snap position, curve starts at lane end (roughly)
                     self.deregister_from_lane(self.current_lane) # [NEW] Leaving lane for curve
                     self.current_lane = None
-                    print(f"[DEBUG] [Car {self.id}] At Node {node.id} chose turn to Lane {next_lane.id}. Path Len: {len(self.path)}")
+                    # print(f"[DEBUG] [Car {self.id}] At Node {node.id} chose turn to Lane {next_lane.id}. Path Len: {len(self.path)}")
                 else:
                     print(f"[ERROR] [Car {self.id}] At Node {node.id}: Selected connection {key} but could not find Next Lane object!")
                     # Hard fail or Despawn? Despawn to be safe

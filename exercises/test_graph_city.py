@@ -79,6 +79,7 @@ def main():
     num_cars_to_brake = [5] # [NEW] GUI State
     reckless_chance = [0.2] # [NEW] Phase 5: GUI Control
     crash_events = [] # [NEW] Phase 3: Store impact positions
+    total_crashes = [0] # [NEW] Phase 6: Global Crash Counter
 
     def detect_crashes(active_agents):
         """
@@ -140,11 +141,13 @@ def main():
             a2.alive = False
             midpoint = (a1.position + a2.position) * 0.5
             crash_events.append(midpoint)
+            total_crashes[0] += 1
             
             print(f"DEBUG: [Car {a1.id}] crashed into [Car {a2.id}] at {midpoint}.")
 
     def regenerate():
-        nonlocal current_objects, city_mesh_obj, building_mesh_obj, debug_mesh_obj, agents, city_gen
+        nonlocal current_objects, city_mesh_obj, building_mesh_obj, debug_mesh_obj, agents, city_gen, crash_shape
+
         
         # Clear old objects
         for obj in current_objects:
@@ -156,6 +159,17 @@ def main():
         building_mesh_obj = None
         debug_mesh_obj = None
         crash_events = [] # Clear crashes on regen
+        total_crashes[0] = 0
+        
+        # Clear Crash Visuals (Ensure they are gone)
+        to_remove = []
+        for obj in current_objects:
+             if obj.mesh == crash_shape:
+                 to_remove.append(obj)
+        for obj in to_remove:
+            if obj in glrenderer.objects:
+                glrenderer.objects.remove(obj)
+            current_objects.remove(obj)
 
         # Clear Agents
         for agent in agents:
@@ -230,8 +244,9 @@ def main():
             glrenderer.addObject(debug_mesh_obj)
             current_objects.append(debug_mesh_obj)
         
+        
         # [NEW] Phase 5 Optimization: Shared Crash Shape
-        nonlocal crash_shape
+        # nonlocal crash_shape (Moved to top)
         crash_shape = Cube(side_length=2.5, color=glm.vec4(1.0, 0.0, 0.0, 1.0))
         crash_shape.createGeometry()
         
@@ -382,6 +397,8 @@ def main():
             
         if imgui.button("Regenerate"):
             regenerate()
+            
+        imgui.text(f"Total Crashes: {total_crashes[0]}")
             
         _, num_cars_to_brake[0] = imgui.input_int("Num to Brake", num_cars_to_brake[0])
         if imgui.button("Brake Random Cars"):
