@@ -112,6 +112,10 @@ class SceneManager:
         return self.objects
 
     def update_uniforms(self, config, dt):
+        if not hasattr(self, 'accum_time'):
+            self.accum_time = 0.0
+        self.accum_time += dt
+
         if config.SLICE_ANIMATE:
             self.slice_offset += config.SLICE_SPEED * dt
             
@@ -120,6 +124,11 @@ class SceneManager:
                 obj.material.uniforms["enable_glow"] = config.ENABLE_GLOW
                 obj.material.uniforms["is_point_mode"] = (obj.draw_mode == gl.GL_POINTS)
                 obj.material.uniforms["base_color"] = glm.vec3(*config.POINT_CLOUD_COLOR)
+                obj.material.uniforms["point_size"] = config.POINT_SIZE
+                obj.material.uniforms["shape_type"] = config.POINT_SHAPE
+                obj.material.uniforms["time"] = self.accum_time
+                obj.material.uniforms["anim_x"] = config.ANIM_RESIZE_X
+                obj.material.uniforms["anim_y"] = config.ANIM_RESIZE_Y
             elif obj.material == self.slice_mat:
                 obj.material.uniforms["slice_spacing"] = config.SLICE_SPACING
                 obj.material.uniforms["slice_thickness"] = config.SLICE_THICKNESS

@@ -217,12 +217,25 @@ class Edge:
         lane_width = self.width / self.lanes_count 
         offset_dist = self.width * 0.15 
         
+        # [NEW] Helper: Interpolate Line for "Two-Point" Road Fix
+        def interpolate_line(p_start, p_end, step_size=5.0):
+            points = []
+            total_dist = glm.length(p_end - p_start)
+            count = int(total_dist / step_size)
+            if count < 1: count = 1
+            
+            for i in range(count + 1):
+                t = i / count
+                points.append(glm.mix(p_start, p_end, t))
+            return points # Returns list of vec3
+        
         # 5. Generate Lanes (Applied to Shortened Base)
         
         # Forward Lane (Right Side)
         f_start = lane_base_start + perp * offset_dist
         f_end   = lane_base_end + perp * offset_dist
-        self.lanes.append(Lane(width=lane_width, waypoints=[f_start, f_end], parent_edge=self, dest_node=self.end_node))
+        f_waypoints = interpolate_line(f_start, f_end)
+        self.lanes.append(Lane(width=lane_width, waypoints=f_waypoints, parent_edge=self, dest_node=self.end_node))
         
         # Backward Lane (Left Side) - Travel Direction is End -> Start
         # Relative to p1->p2 "Left" is the other side.
@@ -230,7 +243,8 @@ class Edge:
         b_end   = lane_base_end - perp * offset_dist
         
         # Backward Lane travels FROM End TO Start
-        self.lanes.append(Lane(width=lane_width, waypoints=[b_end, b_start], parent_edge=self, dest_node=self.start_node))
+        b_waypoints = interpolate_line(b_end, b_start)
+        self.lanes.append(Lane(width=lane_width, waypoints=b_waypoints, parent_edge=self, dest_node=self.start_node))
 
     def __repr__(self):
         return f"Edge(start={self.start_node.id}, end={self.end_node.id}, w={self.width}, lanes={len(self.lanes)})"

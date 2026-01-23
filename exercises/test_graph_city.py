@@ -115,6 +115,7 @@ def main():
             batcher_infra.add_shape(shape)
         for shape in adv_gen.sidewalks:
             batcher_infra.add_shape(shape)
+            
         # Don't forget the parks if you want them!
         for shape in getattr(adv_gen, 'parks', []):
              # Make parks green

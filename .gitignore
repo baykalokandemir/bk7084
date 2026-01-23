@@ -1,1 +1,10 @@
 .venv/
+framework/__pycache__/
+
+framework/utils/__pycache__/
+
+framework/shapes/cars/__pycache__/
+
+project/__pycache__/
+
+framework/shapes/__pycache__/
