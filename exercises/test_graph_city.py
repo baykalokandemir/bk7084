@@ -65,19 +65,94 @@ def main():
     
     # Toggle State
     show_buildings = [False] 
-    
+    crash_debug = False
+    print_stuck_debug=False
+    print_despawn_debug=False
+
     # Store explicit references
     current_objects = []
     city_mesh_obj = None
     building_mesh_obj = None
     debug_mesh_obj = None
+    signal_mesh_obj = None # [NEW] Dynamic Traffic Lights
+    crash_shape = None # [NEW] Shared Geometry
 
     # [NEW] Agent State
     agents = []
     target_agent_count = [1] # List for ImGui (mutable)
+    num_cars_to_brake = [5] # [NEW] GUI State
+    reckless_chance = [0.2] # [NEW] Phase 5: GUI Control
+    crash_events = [] # [NEW] Phase 3: Store impact positions
+    total_crashes = [0] # [NEW] Phase 6: Global Crash Counter
+
+    def detect_crashes(active_agents):
+        """
+        Phase 3: Spatial Hash Collision Detection
+        Complexity: O(N) instead of O(N^2)
+        """
+        spatial_grid = {}
+        cell_size = 5.0
+        
+        # 1. Bucket Phase
+        for agent in active_agents:
+            if not agent.alive: continue
+            
+            # Compute Grid Key
+            # We use (x, z) for 2D plane hashing
+            gx = int(agent.position.x // cell_size)
+            gz = int(agent.position.z // cell_size)
+            key = (gx, gz)
+            
+            if key not in spatial_grid:
+                spatial_grid[key] = []
+            spatial_grid[key].append(agent)
+            
+        # 2. Check Phase
+        # We only check collisions within the same bucket for strictness.
+        # (Technically should check neighbors for edge cases, but strict bucket is fine for now)
+        
+        # Collect deaths to avoid modifying list while iterating or double killing
+        crashes = []
+        
+        for key, cell_agents in spatial_grid.items():
+            if len(cell_agents) < 2: continue
+            
+            # Brute force within cell
+            for i in range(len(cell_agents)):
+                a1 = cell_agents[i]
+                if not a1.alive: continue
+                
+                for j in range(i + 1, len(cell_agents)):
+                    a2 = cell_agents[j]
+                    if not a2.alive: continue
+                    
+                    dist = glm.distance(a1.position, a2.position)
+                    if dist < 2.5: # Collision Threshold
+                        # [FIX] Ignore Parallel Lane False Positives
+                        # If agents are on the same road (Edge) but different lanes, we assume they are safe side-by-side.
+                        if a1.current_lane and a2.current_lane and a1.current_lane != a2.current_lane:
+                            if hasattr(a1.current_lane, 'parent_edge') and hasattr(a2.current_lane, 'parent_edge'):
+                                if a1.current_lane.parent_edge == a2.current_lane.parent_edge:
+                                    continue 
+
+                        crashes.append((a1, a2))
+        
+        # 3. Resolve
+        for a1, a2 in crashes:
+            if not a1.alive or not a2.alive: continue # Already processed
+            
+            a1.alive = False
+            a2.alive = False
+            midpoint = (a1.position + a2.position) * 0.5
+            crash_events.append(midpoint)
+            total_crashes[0] += 1
+            
+            if (crash_debug):
+                print(f"DEBUG: [Car {a1.id}] crashed into [Car {a2.id}] at {midpoint}.")
 
     def regenerate():
-        nonlocal current_objects, city_mesh_obj, building_mesh_obj, debug_mesh_obj, agents, city_gen
+        nonlocal current_objects, city_mesh_obj, building_mesh_obj, debug_mesh_obj, signal_mesh_obj, agents, city_gen, crash_shape
+
         
         # Clear old objects
         for obj in current_objects:
@@ -86,7 +161,23 @@ def main():
         current_objects = []
         city_mesh_obj = None
         building_mesh_obj = None
+        building_mesh_obj = None
+        building_mesh_obj = None
+        building_mesh_obj = None
         debug_mesh_obj = None
+        signal_mesh_obj = None
+        crash_events = [] # Clear crashes on regen
+        total_crashes[0] = 0
+        
+        # Clear Crash Visuals (Ensure they are gone)
+        to_remove = []
+        for obj in current_objects:
+             if obj.mesh == crash_shape:
+                 to_remove.append(obj)
+        for obj in to_remove:
+            if obj in glrenderer.objects:
+                glrenderer.objects.remove(obj)
+            current_objects.remove(obj)
 
         # Clear Agents
         for agent in agents:
@@ -161,6 +252,12 @@ def main():
             glrenderer.addObject(debug_mesh_obj)
             current_objects.append(debug_mesh_obj)
         
+        
+        # [NEW] Phase 5 Optimization: Shared Crash Shape
+        # nonlocal crash_shape (Moved to top)
+        crash_shape = Cube(side_length=2.5, color=glm.vec4(1.0, 0.0, 0.0, 1.0))
+        crash_shape.createGeometry()
+        
         # 5. [NEW] Visualize Auditor Failures (Red Cubes)
         if hasattr(city_gen, 'dead_end_lanes') and city_gen.dead_end_lanes:
             batcher_fails = MeshBatcher()
@@ -234,7 +331,10 @@ def main():
                 edge = random.choice(city_gen.graph.edges)
                 if hasattr(edge, 'lanes') and edge.lanes:
                     lane = random.choice(edge.lanes)
-                    ag = CarAgent(lane)
+                    
+                    # [NEW] Phase 5: Reckless Logic
+                    is_reckless = (random.random() < reckless_chance[0])
+                    ag = CarAgent(lane, is_reckless=is_reckless)
                     
                     # Random color tweak?
                     # ag.mesh_object.material.uniforms['color'] = ... (Need shader support)
@@ -242,11 +342,64 @@ def main():
                     agents.append(ag)
                     glrenderer.addObject(ag.mesh_object)
         
-        # 2. Update Agents
-        for agent in agents:
-            agent.update(0.016)
+        # 2. Update Simulation (Nodes & Agents)
+        for node in city_gen.graph.nodes:
+            node.update(0.016)
             
-        # 3. Cleanup Dead Agents
+            
+        for agent in agents:
+            agent.update(0.016, print_stuck_debug, print_despawn_debug)
+            
+        # [NEW] Phase 2: Render Dynamic Signals
+        # 1. Generate Shape
+        signal_shape = mesh_gen.generate_dynamic_signals(city_gen.graph)
+        
+        # 2. Update Mesh Object (Swap)
+        if signal_mesh_obj:
+            if signal_mesh_obj in glrenderer.objects:
+                glrenderer.objects.remove(signal_mesh_obj)
+            if signal_mesh_obj in current_objects:
+                current_objects.remove(signal_mesh_obj)
+                
+        if len(signal_shape.vertices) > 0:
+            # Unlit material
+            mat = Material()
+            mat.uniforms = {"ambientStrength": 1.0, "diffuseStrength": 0.0, "specularStrength": 0.0}
+            
+            signal_mesh_obj = MeshObject(signal_shape, mat)
+            signal_mesh_obj.draw_mode = gl.GL_LINES
+            
+            glrenderer.addObject(signal_mesh_obj)
+            current_objects.append(signal_mesh_obj)
+        else:
+            signal_mesh_obj = None
+            
+        # 3. Detect Crashes
+        detect_crashes(agents)
+        
+        # [NEW] Phase 4: Render Crashes
+        if crash_events:
+            if crash_shape is None:
+                 # Init if not ready (e.g. if regenerate called before)
+                 pass # Assumed init in regenerate
+                 
+            for pos in crash_events:
+                # [OPTIMIZED] Reuse geometry
+                if crash_shape:
+                    # Glowing Material
+                    mat = Material()
+                    mat.uniforms = {"ambientStrength": 1.0, "diffuseStrength": 0.0, "specularStrength": 0.0}
+                    
+                    crash_obj = MeshObject(crash_shape, mat)
+                    crash_obj.transform = glm.translate(pos)
+                    
+                    glrenderer.addObject(crash_obj)
+                    current_objects.append(crash_obj)
+            
+            # Clear events so we don't re-process
+            crash_events.clear()
+            
+        # 4. Cleanup Dead Agents
         # Iterate copy or use list comprehension to filter
         alive_agents = []
         for agent in agents:
@@ -281,10 +434,50 @@ def main():
         if imgui.button("Regenerate"):
             regenerate()
             
+        imgui.text(f"Total Crashes: {total_crashes[0]}")
+            
+        _, num_cars_to_brake[0] = imgui.input_int("Num to Brake", num_cars_to_brake[0])
+        if imgui.button("Brake Random Cars"):
+            # Select N random cars and set manual_brake = True
+            count = min(num_cars_to_brake[0], len(agents))
+            if count > 0:
+                candidates = [a for a in agents if not a.manual_brake and not a.is_reckless] # [FIX] Don't stop reckless drivers
+                if len(candidates) < count:
+                    targets = candidates # Brake all available
+                else:
+                    targets = random.sample(candidates, count)
+                
+                for t in targets:
+                    t.manual_brake = True
+                print(f"[USER] Manually braked {len(targets)} cars.")
+        
+        if imgui.button("Release All"):
+            for a in agents:
+                a.manual_brake = False
+            print("[USER] Released all manual brakes.")
+            
+        _, reckless_chance[0] = imgui.slider_float("Reckless %", reckless_chance[0], 0.0, 1.0)
+        
+        if imgui.button("Clear Wrecks"):
+             # Remove objects that use crash_shape
+             to_remove = []
+             for obj in current_objects:
+                 if obj.mesh == crash_shape:
+                     to_remove.append(obj)
+             
+             for obj in to_remove:
+                 if obj in glrenderer.objects:
+                     glrenderer.objects.remove(obj)
+                 current_objects.remove(obj)
+             print(f"[USER] Cleared {len(to_remove)} wrecks.")
+
         _, target_agent_count[0] = imgui.slider_int("Car Count", target_agent_count[0], 0, 50)
         imgui.separator()
             
         _, show_buildings[0] = imgui.checkbox("Show Buildings", show_buildings[0])
+        _, crash_debug = imgui.checkbox("Crash Debug", crash_debug)
+        _, print_stuck_debug = imgui.checkbox("Print Stuck Debug", print_stuck_debug)
+        _, print_despawn_debug = imgui.checkbox("Print Despawn Debug", print_despawn_debug)
             
         imgui.text(f"Nodes: {len(city_gen.graph.nodes)}")
         imgui.text(f"Edges: {len(city_gen.graph.edges)}")
