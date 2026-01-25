@@ -30,7 +30,12 @@ The main entry point.
 1.  **Town Square**: Optionally carves a central plaza (currently disabled in hybrid mode).
 2.  **Recursion**: Calls `_split_city_recursive` to slice the city into blocks and roads.
 3.  **Mesh Generation**: Converts the abstract `RoadNetwork` edges into 3D meshes (Roads, Sidewalks).
+3.  **Mesh Generation**: Converts the abstract `RoadNetwork` edges into 3D meshes (Roads, Sidewalks).
 4.  **Street Lights**: Procedurally places street lamps along the road edges.
+5.  **Building Styles**: Aslots are processed, each building is assigned a randomized architectural style, including:
+    *   **Texture**: Randomly selected from a palette (Brick, Concrete, Tile).
+    *   **Windows**: Random window distributions (Strips vs Single).
+    *   **Form**: Random chance for stepped setbacks (skyscrapers).
 
 ## Usage
 

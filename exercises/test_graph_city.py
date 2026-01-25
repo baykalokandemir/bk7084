@@ -7,7 +7,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 from framework.window import OpenGLWindow
 from framework.renderer import GLRenderer
 from framework.objects import MeshObject
-from framework.materials import Material
+from framework.materials import Material, Texture
 from framework.utils.city_generator import CityGenerator
 from framework.utils.advanced_city_generator import AdvancedCityGenerator
 from framework.utils.mesh_generator import MeshGenerator
@@ -72,7 +72,7 @@ def main():
     # Store explicit references
     current_objects = []
     city_mesh_obj = None
-    building_mesh_obj = None
+    building_mesh_objs = [] # List of MeshObjects (one per texture)
     debug_mesh_obj = None
     signal_mesh_obj = None # [NEW] Dynamic Traffic Lights
     crash_shape = None # [NEW] Shared Geometry
@@ -151,7 +151,7 @@ def main():
                 print(f"DEBUG: [Car {a1.id}] crashed into [Car {a2.id}] at {midpoint}.")
 
     def regenerate():
-        nonlocal current_objects, city_mesh_obj, building_mesh_obj, debug_mesh_obj, signal_mesh_obj, agents, city_gen, crash_shape
+        nonlocal current_objects, city_mesh_obj, building_mesh_objs, debug_mesh_obj, signal_mesh_obj, agents, city_gen, crash_shape
 
         
         # Clear old objects
@@ -160,10 +160,7 @@ def main():
                 glrenderer.objects.remove(obj)
         current_objects = []
         city_mesh_obj = None
-        building_mesh_obj = None
-        building_mesh_obj = None
-        building_mesh_obj = None
-        building_mesh_obj = None
+        building_mesh_objs = []
         debug_mesh_obj = None
         signal_mesh_obj = None
         crash_events = [] # Clear crashes on regen
@@ -190,8 +187,19 @@ def main():
         
         # 1. Generate BSP Layout (Visuals + Layout)
         print("Generating BSP Layout...")
+        
+        # Scan for textures
+        texture_dir = os.path.join(os.path.dirname(__file__), "assets", "building_textures")
+        found_textures = []
+        if os.path.exists(texture_dir):
+            for f in os.listdir(texture_dir):
+                if f.lower().endswith(('.png', '.jpg', '.jpeg')):
+                    found_textures.append(f)
+        else:
+            print(f"Warning: Texture directory {texture_dir} not found.")
+
         adv_gen = AdvancedCityGenerator(width=400, depth=400)
-        adv_gen.generate()
+        adv_gen.generate(texture_list=found_textures)
         
         # 2. Build Traffic Graph (Logic Only)
         print("Building Traffic Graph...")
@@ -218,22 +226,52 @@ def main():
             glrenderer.addObject(city_mesh_obj)
             current_objects.append(city_mesh_obj)
 
-        # Batch 2: Buildings (FROM BSP)
+        # Batch 2: Buildings (FROM BSP) - Multi-Texture Support
         print("Batching Buildings (BSP)...")
-        batcher_bldg = MeshBatcher()
         
-        # Use adv_gen.buildings instead of city_gen.buildings
+        texture_files = found_textures # Use the list we found earlier
+        texture_cache = {}
+        batchers = {}
+        
+        # Init Batchers and Load Textures
+        for t_name in texture_files:
+            batchers[t_name] = MeshBatcher()
+            # Load Texture
+            path = os.path.join(texture_dir, t_name) # Use texture_dir
+            if os.path.exists(path):
+                texture_cache[t_name] = Texture(file_path=path)
+            else:
+                print(f"Warning: Texture {path} not found.")
+                
+        # Fallback batcher for no texture
+        batchers["default"] = MeshBatcher()
+        
+        # Distribute Shapes
         for shape in adv_gen.buildings:
-             # BSP buildings usually have colors baked in or need random assignment
-             # If shape.colors is empty, the batcher might complain or render black.
-             # AdvancedCityGenerator usually handles this.
-            batcher_bldg.add_shape(shape)
+            t_name = getattr(shape, 'texture_name', 'default')
+            if t_name in batchers:
+                batchers[t_name].add_shape(shape)
+            else:
+                batchers["default"].add_shape(shape)
+                
+        # Build Meshes
+        for t_name, batcher in batchers.items():
+            if len(batcher.vertices) == 0: continue
             
-        building_mesh_obj = batcher_bldg.build(Material())
-        if building_mesh_obj:
-            current_objects.append(building_mesh_obj)
-            if show_buildings[0]:
-                glrenderer.addObject(building_mesh_obj)
+            mat = Material()
+            if t_name in texture_cache:
+                mat = Material(color_texture=texture_cache[t_name])
+                mat.specular_strength = 0.1 # Bricks aren't very shiny
+                mat.texture_scale = glm.vec2(1.0, 1.0) # UVs are already scaled in building.py
+            else:
+                mat.specular_strength = 0.5
+                
+            mesh_obj = batcher.build(mat)
+            if mesh_obj:
+                building_mesh_objs.append(mesh_obj)
+                current_objects.append(mesh_obj)
+                if show_buildings[0]:
+                    glrenderer.addObject(mesh_obj)
             
         # 4. Generate Debug Traffic Lines (Graph)
         print("Generating Traffic Debug...")
@@ -412,12 +450,12 @@ def main():
         agents = alive_agents
         
         # Handle Toggle Logic (State Sync)
-        if building_mesh_obj:
-            is_in_renderer = building_mesh_obj in glrenderer.objects
+        for b_obj in building_mesh_objs:
+            is_in_renderer = b_obj in glrenderer.objects
             if show_buildings[0] and not is_in_renderer:
-                glrenderer.addObject(building_mesh_obj)
+                glrenderer.addObject(b_obj)
             elif not show_buildings[0] and is_in_renderer:
-                glrenderer.objects.remove(building_mesh_obj)
+                glrenderer.objects.remove(b_obj)
         
         glrenderer.render()
         

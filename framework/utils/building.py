@@ -24,6 +24,10 @@ class Building:
         """
         shape = Shape()
         
+        # Store assigned texture
+        shape.texture_name = self.style_params.get("texture", "concrete.jpg")
+
+        
         all_vertices = []
         all_normals = []
         all_uvs = []
@@ -41,47 +45,64 @@ class Building:
             h3 = self.height * 0.2
             
             # Tier 1 (Base)
-            self._generate_block(self.footprint, 0, h1, all_vertices, all_normals, all_colors, all_indices)
+            self._generate_block(self.footprint, 0, h1, all_vertices, all_normals, all_colors, all_indices, all_uvs)
             
             # Tier 2
             poly2 = self.footprint.scale(0.7)
-            self._generate_block(poly2, h1, h1+h2, all_vertices, all_normals, all_colors, all_indices)
+            self._generate_block(poly2, h1, h1+h2, all_vertices, all_normals, all_colors, all_indices, all_uvs)
             
             # Tier 3
             poly3 = poly2.scale(0.6) # relative to poly2? No, scale method is relative to self centroid.
             # poly2 is already scaled. poly3 should be smaller.
             # Let's just scale original
             poly3 = self.footprint.scale(0.4)
-            self._generate_block(poly3, h1+h2, h1+h2+h3, all_vertices, all_normals, all_colors, all_indices)
+            self._generate_block(poly3, h1+h2, h1+h2+h3, all_vertices, all_normals, all_colors, all_indices, all_uvs)
             
             # Antenna on top
             if random.random() < 0.5:
-                self._add_antenna(poly3.centroid, h1+h2+h3, all_vertices, all_normals, all_colors, all_indices)
+                self._add_antenna(poly3.centroid, h1+h2+h3, all_vertices, all_normals, all_colors, all_indices, all_uvs)
                 
         else:
             # Single Block
-            self._generate_block(self.footprint, 0, self.height, all_vertices, all_normals, all_colors, all_indices)
+            self._generate_block(self.footprint, 0, self.height, all_vertices, all_normals, all_colors, all_indices, all_uvs)
             
             # Antenna
             if random.random() < 0.3:
-                self._add_antenna(self.footprint.centroid, self.height, all_vertices, all_normals, all_colors, all_indices)
+                self._add_antenna(self.footprint.centroid, self.height, all_vertices, all_normals, all_colors, all_indices, all_uvs)
 
         # Populate Shape
         shape.vertices = np.array([v.to_list() for v in all_vertices], dtype=np.float32)
         shape.normals = np.array([n.to_list() for n in all_normals], dtype=np.float32)
-        shape.uvs = np.zeros((len(all_vertices), 2), dtype=np.float32) 
+        shape.uvs = np.array([u.to_list() for u in all_uvs], dtype=np.float32)
         shape.colors = np.array([c.to_list() for c in all_colors], dtype=np.float32)
         shape.indices = np.array(all_indices, dtype=np.uint32)
         
         return shape
 
-    def _generate_block(self, poly, y_start, y_end, verts, norms, cols, inds):
         # 1. Top Face (Roof)
         top_start_idx = len(verts)
         for v in poly.vertices:
             verts.append(glm.vec4(v.x, y_end, v.y, 1.0))
             norms.append(glm.vec3(0, 1, 0))
             cols.append(self.color)
+            # Planar UV for roof
+            all_uvs = cols # Variable name mismatch in original code, fixed below by passing separate list?
+            # Wait, helper function signature change means we need to pass list to _add_quad.
+            # But here we are manually adding vertices.
+            # Let's add to uvs list.
+            # Use 'uvs' argument name from function def? No, func def uses 'verts, norms, cols, inds'.
+            # I need to add 'uvs' to _generate_block signature first.
+        
+    def _generate_block(self, poly, y_start, y_end, verts, norms, cols, inds, uvs=None):
+        if uvs is None: uvs = [] # Should be passed from generate
+            
+        # 1. Top Face (Roof)
+        top_start_idx = len(verts)
+        for v in poly.vertices:
+            verts.append(glm.vec4(v.x, y_end, v.y, 1.0))
+            norms.append(glm.vec3(0, 1, 0))
+            cols.append(self.color)
+            uvs.append(glm.vec2(v.x * 0.1, v.y * 0.1)) # Scale UVs for roof
             
         top_indices = poly.triangulate()
         for idx in top_indices:
@@ -116,16 +137,20 @@ class Building:
                 y_top = y_start + (f + 1) * real_floor_h
                 
                 # Left Column
-                self._add_quad(verts, norms, cols, inds,
+                self._add_quad(verts, norms, cols, inds, uvs,
                                p1 + glm.vec3(0, y_bottom, 0), w_start + glm.vec3(0, y_bottom, 0),
                                w_start + glm.vec3(0, y_top, 0), p1 + glm.vec3(0, y_top, 0),
-                               normal, self.color)
+                               normal, self.color,
+                               uv1=glm.vec2(0, y_bottom), uv2=glm.vec2(margin, y_bottom),
+                               uv3=glm.vec2(margin, y_top), uv4=glm.vec2(0, y_top))
                                
                 # Right Column
-                self._add_quad(verts, norms, cols, inds,
+                self._add_quad(verts, norms, cols, inds, uvs,
                                w_end + glm.vec3(0, y_bottom, 0), p2 + glm.vec3(0, y_bottom, 0),
                                p2 + glm.vec3(0, y_top, 0), w_end + glm.vec3(0, y_top, 0),
-                               normal, self.color)
+                               normal, self.color,
+                               uv1=glm.vec2(edge_len - margin, y_bottom), uv2=glm.vec2(edge_len, y_bottom),
+                               uv3=glm.vec2(edge_len, y_top), uv4=glm.vec2(edge_len - margin, y_top))
                 
                 # Center Area Logic
                 wall_vec = w_end - w_start
@@ -179,10 +204,12 @@ class Building:
                     if s > curr_dist + 0.01:
                         p_wall_start = w_start + wall_dir * curr_dist
                         p_wall_end = w_start + wall_dir * s
-                        self._add_quad(verts, norms, cols, inds,
+                        self._add_quad(verts, norms, cols, inds, uvs,
                                        p_wall_start + glm.vec3(0, y_bottom, 0), p_wall_end + glm.vec3(0, y_bottom, 0),
                                        p_wall_end + glm.vec3(0, y_top, 0), p_wall_start + glm.vec3(0, y_top, 0),
-                                       normal, self.color)
+                                       normal, self.color,
+                                       uv1=glm.vec2(margin + curr_dist, y_bottom), uv2=glm.vec2(margin + s, y_bottom),
+                                       uv3=glm.vec2(margin + s, y_top), uv4=glm.vec2(margin + curr_dist, y_top))
                     
                     # Draw Window
                     p_win_start = w_start + wall_dir * s
@@ -196,16 +223,20 @@ class Building:
                     y_head = y_top - sill_h
                     
                     # Sill
-                    self._add_quad(verts, norms, cols, inds,
+                    self._add_quad(verts, norms, cols, inds, uvs,
                                    p_win_start + glm.vec3(0, y_bottom, 0), p_win_end + glm.vec3(0, y_bottom, 0),
                                    p_win_end + glm.vec3(0, y_sill, 0), p_win_start + glm.vec3(0, y_sill, 0),
-                                   normal, self.color)
+                                   normal, self.color,
+                                   uv1=glm.vec2(margin + s, y_bottom), uv2=glm.vec2(margin + e, y_bottom),
+                                   uv3=glm.vec2(margin + e, y_sill), uv4=glm.vec2(margin + s, y_sill))
                                    
                     # Header
-                    self._add_quad(verts, norms, cols, inds,
+                    self._add_quad(verts, norms, cols, inds, uvs,
                                    p_win_start + glm.vec3(0, y_head, 0), p_win_end + glm.vec3(0, y_head, 0),
                                    p_win_end + glm.vec3(0, y_top, 0), p_win_start + glm.vec3(0, y_top, 0),
-                                   normal, self.color)
+                                   normal, self.color,
+                                   uv1=glm.vec2(margin + s, y_head), uv2=glm.vec2(margin + e, y_head),
+                                   uv3=glm.vec2(margin + e, y_top), uv4=glm.vec2(margin + s, y_top))
                                    
                     # Inset Window
                     inset = -normal * self.inset_depth
@@ -221,13 +252,16 @@ class Building:
                     i_p4 = w_p4 + inset
                     
                     # Glass
-                    self._add_quad(verts, norms, cols, inds, i_p1, i_p2, i_p3, i_p4, normal, self.window_color)
+                    self._add_quad(verts, norms, cols, inds, uvs, i_p1, i_p2, i_p3, i_p4, normal, self.window_color,
+                                   uv1=glm.vec2(margin + s, y_sill), uv2=glm.vec2(margin + e, y_sill),
+                                   uv3=glm.vec2(margin + e, y_head), uv4=glm.vec2(margin + s, y_head))
                                    
                     # Frames
-                    self._add_quad(verts, norms, cols, inds, w_p1, w_p2, i_p2, i_p1, glm.vec3(0, 1, 0), self.color) # Bot
-                    self._add_quad(verts, norms, cols, inds, i_p4, i_p3, w_p3, w_p4, glm.vec3(0, -1, 0), self.color) # Top
-                    self._add_quad(verts, norms, cols, inds, w_p4, w_p1, i_p1, i_p4, edge_dir, self.color) # Left
-                    self._add_quad(verts, norms, cols, inds, w_p2, w_p3, i_p3, i_p2, -edge_dir, self.color) # Right
+                    zero_uv = glm.vec2(0, 0)
+                    self._add_quad(verts, norms, cols, inds, uvs, w_p1, w_p2, i_p2, i_p1, glm.vec3(0, 1, 0), self.color, zero_uv, zero_uv, zero_uv, zero_uv) # Bot
+                    self._add_quad(verts, norms, cols, inds, uvs, i_p4, i_p3, w_p3, w_p4, glm.vec3(0, -1, 0), self.color, zero_uv, zero_uv, zero_uv, zero_uv) # Top
+                    self._add_quad(verts, norms, cols, inds, uvs, w_p4, w_p1, i_p1, i_p4, edge_dir, self.color, zero_uv, zero_uv, zero_uv, zero_uv) # Left
+                    self._add_quad(verts, norms, cols, inds, uvs, w_p2, w_p3, i_p3, i_p2, -edge_dir, self.color, zero_uv, zero_uv, zero_uv, zero_uv) # Right
                     
                     curr_dist = e
                     
@@ -235,12 +269,16 @@ class Building:
                 if curr_dist < wall_len - 0.01:
                     p_wall_start = w_start + wall_dir * curr_dist
                     p_wall_end = w_end
-                    self._add_quad(verts, norms, cols, inds,
+                    p_wall_start = w_start + wall_dir * curr_dist
+                    p_wall_end = w_end
+                    self._add_quad(verts, norms, cols, inds, uvs,
                                    p_wall_start + glm.vec3(0, y_bottom, 0), p_wall_end + glm.vec3(0, y_bottom, 0),
                                    p_wall_end + glm.vec3(0, y_top, 0), p_wall_start + glm.vec3(0, y_top, 0),
-                                   normal, self.color)
+                                   normal, self.color,
+                                   uv1=glm.vec2(margin + curr_dist, y_bottom), uv2=glm.vec2(edge_len - margin, y_bottom),
+                                   uv3=glm.vec2(edge_len - margin, y_top), uv4=glm.vec2(margin + curr_dist, y_top))
 
-    def _add_antenna(self, pos, y_start, verts, norms, cols, inds):
+    def _add_antenna(self, pos, y_start, verts, norms, cols, inds, uvs):
         # Simple pole
         h = random.uniform(2.0, 8.0)
         w = 0.2
@@ -260,14 +298,17 @@ class Building:
         
         color = glm.vec4(0.5, 0.5, 0.5, 1.0)
         
-        self._add_quad(verts, norms, cols, inds, p1, p2, t2, t1, glm.vec3(0, 0, -1), color)
-        self._add_quad(verts, norms, cols, inds, p2, p3, t3, t2, glm.vec3(1, 0, 0), color)
-        self._add_quad(verts, norms, cols, inds, p3, p4, t4, t3, glm.vec3(0, 0, 1), color)
-        self._add_quad(verts, norms, cols, inds, p4, p1, t1, t4, glm.vec3(-1, 0, 0), color)
+        # Antenna just uses simple coloring, no specific texture mapping needed, use 0
+        zu = glm.vec2(0,0)
+        self._add_quad(verts, norms, cols, inds, uvs, p1, p2, t2, t1, glm.vec3(0, 0, -1), color, zu, zu, zu, zu)
+        self._add_quad(verts, norms, cols, inds, uvs, p2, p3, t3, t2, glm.vec3(1, 0, 0), color, zu, zu, zu, zu)
+        self._add_quad(verts, norms, cols, inds, uvs, p3, p4, t4, t3, glm.vec3(0, 0, 1), color, zu, zu, zu, zu)
+        self._add_quad(verts, norms, cols, inds, uvs, p4, p1, t1, t4, glm.vec3(-1, 0, 0), color, zu, zu, zu, zu)
 
-    def _add_quad(self, verts, norms, cols, inds, p1, p2, p3, p4, normal, color):
+    def _add_quad(self, verts, norms, cols, inds, uvs, p1, p2, p3, p4, normal, color, uv1, uv2, uv3, uv4):
         idx = len(verts)
         verts.extend([glm.vec4(p1, 1.0), glm.vec4(p2, 1.0), glm.vec4(p3, 1.0), glm.vec4(p4, 1.0)])
         norms.extend([normal] * 4)
         cols.extend([color] * 4)
+        uvs.extend([uv1, uv2, uv3, uv4])
         inds.extend([idx, idx+1, idx+2, idx, idx+2, idx+3])
