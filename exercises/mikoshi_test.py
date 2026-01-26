@@ -8,7 +8,8 @@ from framework.shapes import UVSphere, Cube, Cylinder, Cone
 from framework.objects import MeshObject
 from framework.utils.hologram_wrapper import HologramWrapper
 from framework.utils.l_system import HologramLSystem
-from framework.utils.hologram_agent import HologramAgent
+from framework.utils.hologram_cluster import HologramCluster
+
 from framework.materials import Material
 from pyglm import glm
 import OpenGL.GL as gl
@@ -35,13 +36,13 @@ class Config:
     ENABLE_GLOW = True
     USE_POINT_CLOUD = True
     
-    # Post Process (Keep as they are global renderer settings)
+    # Post Process
     USE_ABERRATION = False
     ABERRATION_STRENGTH = 0.005
     USE_BLUR = False
     BLUR_STRENGTH = 0.002
     
-    # Legacy slice settings (Minimal defaults just in case shader needs them, but we won't expose in UI)
+    # Legacy slice settings
     SLICE_SPACING = 0.1
     SLICE_THICKNESS = 0.005
     SLICE_NORMAL = [1.0, 0.6, 0.0]
@@ -55,41 +56,11 @@ class SceneManager:
         self.slice_mat = Material(vertex_shader="slice_shader.vert", fragment_shader="slice_shader.frag")
         self.slice_offset = 0.0
         self.objects = []
-        self.agents = [] 
+        self.cluster = HologramCluster()
 
     def generate_scene(self, config):
-        self.agents = [] # Clear agents
-        
-        # Pool
-        pool = [
-            Cube(side_length=1.5),
-            UVSphere(radius=0.7),
-            Cylinder(radius=0.7, height=1.5),
-            Cone(radius=0.7, height=1.5)
-        ]
-        
-        root_transform = glm.translate(glm.vec3(0, 0.0, 0))
-        
-        objects = HologramLSystem.create_group(
-            root_transform=root_transform,
-            source_shapes_pool=pool,
-            axiom="F",
-            rules={"F": "F[+F][-F][&F][^F]"},
-            iterations=config.L_ITERATIONS,
-            size_limit=config.L_SIZE_LIMIT, 
-            grid_spacing=config.GRID_SPACING,
-            color=glm.vec3(*config.POINT_CLOUD_COLOR),
-            use_point_cloud=config.USE_POINT_CLOUD,
-            length=config.L_LENGTH,
-            angle_range=(config.L_ANGLE_MIN, config.L_ANGLE_MAX)
-        )
-        
-        for obj in objects:
-            speed = random.uniform(0.5, 2.0)
-            agent = HologramAgent(obj, rotation_speed=speed)
-            self.agents.append(agent)
-            
-        self.objects = objects
+        self.cluster.regenerate(config)
+        self.objects = self.cluster.objects
         self.update_uniforms(config, 0.0)
         return self.objects
 
@@ -98,21 +69,16 @@ class SceneManager:
             self.accum_time = 0.0
         self.accum_time += dt
 
-        for agent in self.agents:
-            agent.update(dt)
+        # Update Cluster Logic (Animation)
+        self.cluster.update(dt)
+        self.cluster.update_uniforms(config, self.accum_time)
 
         if config.SLICE_ANIMATE:
             self.slice_offset += config.SLICE_SPEED * dt
             
+        # Standard Slice update (Hologram uniforms handled by cluster)
         for obj in self.objects:
-            if hasattr(obj.material, 'vertex_shader') and obj.material.vertex_shader == "mikoshi_shader.vert":
-                obj.material.uniforms["enable_glow"] = config.ENABLE_GLOW
-                obj.material.uniforms["base_color"] = glm.vec3(*config.POINT_CLOUD_COLOR)
-                obj.material.uniforms["point_size"] = config.POINT_SIZE
-                obj.material.uniforms["shape_type"] = config.POINT_SHAPE
-                obj.material.uniforms["time"] = self.accum_time
-            elif obj.material == self.slice_mat:
-                # Keep slice uniforms just in case logic falls back
+             if obj.material == self.slice_mat:
                 obj.material.uniforms["slice_spacing"] = config.SLICE_SPACING
                 obj.material.uniforms["slice_thickness"] = config.SLICE_THICKNESS
                 obj.material.uniforms["slice_normal"] = glm.vec3(*config.SLICE_NORMAL)
