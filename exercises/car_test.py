@@ -87,30 +87,13 @@ def main():
         if current_car_obj:
             if current_car_obj in glrenderer.objects:
                 glrenderer.objects.remove(current_car_obj)
-            # BaseVehicle adds parts which are MeshObjects.
-            # BaseVehicle itself is NOT an Object in the renderer list directly in my old code?
-            # Wait, BaseVehicle inherits Object.
-            # But in test_graph_city, we added `ag.mesh_object` which IS the BaseVehicle (or wrapper).
-            # If BaseVehicle is passed to wrapper, wrapper is added.
-            # If CarAgent.mesh_object = BaseVehicle instance, then BaseVehicle IS added.
             pass
-            
-        # In this scene we don't use CarAgent, we just render the car directly.
-        # But BaseVehicle.parts contains the actual MeshObjects that render?
-        # Let's check BaseVehicle.draw.
-        # It iterates self.parts and calls draw().
-        # So we add the BaseVehicle instance to renderer.objects.
-        
-        # Double check cleanup:
-        # GLRenderer.render calls o.draw(). BaseVehicle.draw calls part.draw().
-        # So yes, we just remove the BaseVehicle instance from renderer.objects.
         
         # Instantiate
         name, cls = car_classes[selected_idx[0]]
         print(f"Spawning {name}...")
         
         car = cls() # This triggers batch caching if needed
-        # car.create_geometry() # Called in __init__
         
         # Transform: Center it
         car.transform = glm.mat4(1.0)
