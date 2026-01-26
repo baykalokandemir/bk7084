@@ -13,13 +13,8 @@ class UIManager:
         
         # Generation Settings
         if imgui.collapsing_header("Generation", visible=True)[0]:
-            changed, config.POINT_COUNT = imgui.input_int("Point Count", config.POINT_COUNT)
+            _, config.GRID_SPACING = imgui.slider_float("Grid Spacing", config.GRID_SPACING, 0.05, 1.0)
             
-            # Sampling Mode Combo
-            clicked, current = imgui.combo("Sampling Mode", config.SAMPLING_MODE, config.SAMPLING_MODES)
-            if clicked:
-                config.SAMPLING_MODE = current
-                
             changed_scale, config.GLTF_SCALE = imgui.slider_float("GLTF Scale", config.GLTF_SCALE, 0.01, 1.0)
             
             changed_cloud, config.USE_POINT_CLOUD = imgui.checkbox("Use Point Cloud", config.USE_POINT_CLOUD)
@@ -32,9 +27,7 @@ class UIManager:
             if clicked_shape:
                 config.POINT_SHAPE = current_shape
                 
-            imgui.text("Animation")
-            _, config.ANIM_RESIZE_X = imgui.checkbox("Resize Horizontal", config.ANIM_RESIZE_X)
-            _, config.ANIM_RESIZE_Y = imgui.checkbox("Resize Vertical", config.ANIM_RESIZE_Y)
+            # Animation checkboxes removed as forced in wrapper
             
             imgui.separator()
             imgui.text("Model Loading")

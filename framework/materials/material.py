@@ -7,6 +7,8 @@ from . import Texture
 
 class Material:
     def __init__(self, vertex_shader="shader.vert", fragment_shader="shader.frag", color_texture=None):
+        self.vertex_shader = vertex_shader
+        self.fragment_shader = fragment_shader
         filedir = os.path.join(os.path.dirname(os.path.realpath(__file__)), '..', 'shaders')
 
         defines_list = []
