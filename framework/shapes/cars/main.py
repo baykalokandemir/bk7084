@@ -59,6 +59,18 @@ def main():
 
     print("Controls:")
     print("  WASD + Mouse: Move Camera")
+    print("  R: Regenerate Cyberpunk Cars")
+
+    def key_callback(window, key, scancode, action, mods):
+        if key == glfw.KEY_R and action == glfw.PRESS:
+            print("Regenerating ALL vehicles...")
+            for v in vehicles:
+                v.regenerate()
+                    
+        # Forward input to the window's callback to handle camera controls
+        glwindow.key_callback(window, key, scancode, action, mods)
+
+    glfw.set_key_callback(glwindow.window, key_callback)
 
     while not glfw.window_should_close(glwindow.window):
         glrenderer.render()
