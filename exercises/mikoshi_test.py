@@ -3,7 +3,7 @@ sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 from framework.camera import *
 from framework.renderer import *
 from framework.light import *
-from framework.ui_manager import UIManager
+from framework.utils.ui_manager import UIManager
 from framework.utils.holograms_3d import Holograms3D
 from framework.materials import Material
 from pyglm import glm
@@ -81,22 +81,72 @@ class SceneManager:
                 obj.material.uniforms["slice_offset"] = self.slice_offset
                 obj.material.uniforms["color"] = glm.vec3(*config.SLICE_COLOR)
 
+def draw_ui(config, scene_manager, renderer):
+    """Scene-specific UI layout."""
+    imgui.begin("Hologram Controls")
+    
+    # --- L-System Settings ---
+    if imgui.collapsing_header("L-System Rules", visible=True)[0]:
+        changed, config.L_ITERATIONS = imgui.slider_int("Iterations", config.L_ITERATIONS, 1, 5)
+        changed, config.L_SIZE_LIMIT = imgui.slider_int("Max Objects", config.L_SIZE_LIMIT, 1, 50)
+        changed, config.L_LENGTH = imgui.slider_float("Step Length", config.L_LENGTH, 0.5, 5.0)
+        
+        imgui.text("Angle Variance (Min/Max Deg)")
+        changed, new_min = imgui.slider_float("Min Angle", config.L_ANGLE_MIN, 0.0, 180.0)
+        if changed: config.L_ANGLE_MIN = new_min
+        
+        changed, new_max = imgui.slider_float("Max Angle", config.L_ANGLE_MAX, 0.0, 180.0)
+        if changed: config.L_ANGLE_MAX = new_max
+        
+        imgui.separator()
+        if imgui.button("Regenerate Structure"):
+            new_objects = scene_manager.generate_scene(config)
+            renderer.objects = []
+            for obj in new_objects:
+                renderer.addObject(obj)
+
+    # --- Visual Settings ---
+    if imgui.collapsing_header("Hologram Visuals", visible=True)[0]:
+        _, config.GRID_SPACING = imgui.slider_float("Grid Spacing", config.GRID_SPACING, 0.02, 0.5)
+        _, config.POINT_SIZE = imgui.slider_float("Point Size", config.POINT_SIZE, 1.0, 50.0) 
+        clicked, current = imgui.combo("Shape", config.POINT_SHAPE, config.POINT_SHAPES)
+        if clicked: config.POINT_SHAPE = current
+        changed, config.POINT_CLOUD_COLOR = imgui.color_edit3("Color", *config.POINT_CLOUD_COLOR)
+        _, config.ENABLE_GLOW = imgui.checkbox("Enable Glow", config.ENABLE_GLOW)
+        
+        if imgui.button("Apply Grid Changes"):
+            new_objects = scene_manager.generate_scene(config)
+            renderer.objects = []
+            for obj in new_objects:
+                renderer.addObject(obj)
+                
+    # --- Post Process ---
+    if imgui.collapsing_header("Post Processing", visible=True)[0]:
+        _, config.USE_ABERRATION = imgui.checkbox("Chromatic Aberration", config.USE_ABERRATION)
+        if config.USE_ABERRATION:
+            _, config.ABERRATION_STRENGTH = imgui.slider_float("Strength##Aber", config.ABERRATION_STRENGTH, 0.0, 0.05)
+        _, config.USE_BLUR = imgui.checkbox("Blur", config.USE_BLUR)
+        if config.USE_BLUR:
+            _, config.BLUR_STRENGTH = imgui.slider_float("Strength##Blur", config.BLUR_STRENGTH, 0.0, 0.01)
+
+    imgui.end()
+
 def main():
     width, height = 1920, 1080
     glwindow = OpenGLWindow(width, height)
     
     camera = Flycamera(width, height, 70.0, 0.1, 100.0)
-    camera.position = glm.vec3(0.0, 0.0, 12.0)  # Moved camera back further
+    camera.position = glm.vec3(0.0, 0.0, 12.0)
     camera.front = glm.normalize(glm.vec3(0.0, 0.0, 0.0) - camera.position)
     camera.updateView()
     
     glrenderer = GLRenderer(glwindow, camera)
-    glrenderer.clear_color = [0.05, 0.05, 0.1, 1.0] # Dark blue background
+    glrenderer.clear_color = [0.05, 0.05, 0.1, 1.0]
     glrenderer.init_post_process(width, height)
     
-    # ImGui Initialization
-    imgui.create_context()
-    impl = GlfwRenderer(glwindow.window, attach_callbacks=False)
+    # UI Manager (Handles ImGui Init & Input Chaining)
+    ui_manager = UIManager(glwindow.window)
+    ui_manager.setup_input_chaining(glwindow)
 
     # Framebuffer Resize Callback
     def framebuffer_size_callback(window, width, height):
@@ -106,35 +156,9 @@ def main():
         
     glfw.set_framebuffer_size_callback(glwindow.window, framebuffer_size_callback)
     
-    # Overwrite callbacks with our wrappers that call ImGui's handler AND our handler
-    def key_callback_wrapper(window, key, scancode, action, mods):
-        impl.keyboard_callback(window, key, scancode, action, mods)
-        if not imgui.get_io().want_capture_keyboard:
-            glwindow.key_callback(window, key, scancode, action, mods)
-
-    def mouse_button_callback_wrapper(window, button, action, mods):
-        impl.mouse_callback(window, button, action, mods)
-        if not imgui.get_io().want_capture_mouse:
-            glwindow.mouse_button_callback(window, button, action, mods)
-
-    def scroll_callback_wrapper(window, x_offset, y_offset):
-        impl.scroll_callback(window, x_offset, y_offset)
-        if not imgui.get_io().want_capture_mouse:
-            glwindow.scroll_callback(window, x_offset, y_offset)
-
-    def char_callback_wrapper(window, char):
-        impl.char_callback(window, char)
-            
-    # Set our wrappers
-    glfw.set_key_callback(glwindow.window, key_callback_wrapper)
-    glfw.set_mouse_button_callback(glwindow.window, mouse_button_callback_wrapper)
-    glfw.set_scroll_callback(glwindow.window, scroll_callback_wrapper)
-    glfw.set_char_callback(glwindow.window, char_callback_wrapper)
-    
     # Managers
     config = Config()
     scene_manager = SceneManager()
-    ui_manager = UIManager()
     
     # Initial Scene Generation
     initial_objects = scene_manager.generate_scene(config)
@@ -150,11 +174,7 @@ def main():
         dt = current_time - last_time
         last_time = current_time
         
-        # ImGui Input Processing
-        impl.process_inputs()
-        
-        # Render UI
-        ui_manager.render(config, scene_manager, glrenderer)
+
         
         # Update Scene Uniforms
         scene_manager.update_uniforms(config, dt)
@@ -169,14 +189,14 @@ def main():
         
         # Render Scene
         glrenderer.render()
-        
-        # Draw UI Data
-        impl.render(imgui.get_draw_data())
+
+        # Render UI (Processing Inputs handled internally)
+        ui_manager.render(draw_ui, config, scene_manager, glrenderer)
         
         glfw.swap_buffers(glwindow.window)
         glfw.poll_events()
         
-    impl.shutdown()
+    ui_manager.shutdown()
     glrenderer.delete()
     glwindow.delete()
 

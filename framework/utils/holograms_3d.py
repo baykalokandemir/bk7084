@@ -7,10 +7,31 @@ from ..shapes import Cube, UVSphere, Cylinder, Cone
 from ..materials import Material
 from ..objects import MeshObject
 
+class HologramConfig:
+    # L-System Parameters
+    L_ITERATIONS = 2
+    L_SIZE_LIMIT = 12
+    L_LENGTH = 2.5
+    L_ANGLE_MIN = 30.0
+    L_ANGLE_MAX = 120.0
+    
+    # Hologram Settings
+    GRID_SPACING = 0.2
+    POINT_SIZE = 20.0
+    POINT_SHAPE = 1 # 0: Circle, 1: Square
+    POINT_SHAPES = ["Circle", "Square"]
+    POINT_CLOUD_COLOR = [0.0, 0.9, 1.0] # Cyan
+    ENABLE_GLOW = True
+    USE_POINT_CLOUD = True
+    
+    # Post Process shared? Or per-object?
+    # Usually post-process is global, but these are object properties.
+
 class Holograms3D:
-    def __init__(self, root_position=glm.vec3(0, -1.0, 0)):
+    def __init__(self, root_position=glm.vec3(0, -1.0, 0), scale=1.0):
         self.objects = []
         self.root_position = root_position
+        self.scale = scale
         
         # Animation State
         self.group_rotation = 0.0
@@ -83,7 +104,9 @@ class Holograms3D:
         """Updates group and individual animations."""
         # 1. Update Group
         self.group_rotation += self.group_speed * dt
-        group_parent_transform = glm.translate(self.root_position) * glm.rotate(self.group_rotation, glm.vec3(0, 1, 0))
+        # Apply Translation * Rotation * Scale
+        model = glm.translate(self.root_position) * glm.rotate(self.group_rotation, glm.vec3(0, 1, 0))
+        group_parent_transform = glm.scale(model, glm.vec3(self.scale))
         
         # 2. Update Individuals
         for data in self._anim_data:
