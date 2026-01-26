@@ -3,10 +3,14 @@ framework/__pycache__/
 
 framework/utils/__pycache__/
 
-framework/shapes/cars/__pycache__/
-
 project/__pycache__/
 
-framework/shapes/__pycache__/
+framework/shapes/cars/__pycache__/
+
+framework/materials/__pycache__/
 
 framework/objects/__pycache__/
+
+framework/shapes/__pycache__/__init__.cpython-312.pyc
+
+framework/shapes/__pycache__/

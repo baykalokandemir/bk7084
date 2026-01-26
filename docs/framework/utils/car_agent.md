@@ -38,3 +38,24 @@ The agent follows a list of `waypoints` (typically a `Lane` or a Bezier `Curve`)
 
 ### 7. Visual Debugging
 - **`render_debug(renderer, camera)`**: Renders a **Bright Yellow Sphere** at the agent's current *Target Waypoint*.
+
+### 8. Polymorphic Vehicle Support **[NEW]**
+- **Flexibility**: The `CarAgent` can now be initialized with either a raw `Shape` geometry (e.g., `Car`, `Cube`) or a composite `BaseVehicle` object (e.g., `Tank`, `PoliceCar`).
+- **Logic**:
+    - **Shape**: Automatically wrapped in a `MeshObject` helper.
+    - **BaseVehicle**: Used directly as the renderable object (`self.mesh_object`).
+- **Benefits**: Allows for complex vehicles with multiple moving parts (turrets, spinning wheels) while maintaining backward compatibility with simple shapes.
+
+### Example Usage
+
+```python
+from framework.utils.car_agent import CarAgent
+from framework.shapes.cars.tank import Tank
+from framework.shapes.cars.policecar import PoliceCar
+
+# Spawn a Tank
+agent_tank = CarAgent(start_lane, car_shape=Tank())
+
+# Spawn a Police Car
+agent_police = CarAgent(start_lane, car_shape=PoliceCar())
+```

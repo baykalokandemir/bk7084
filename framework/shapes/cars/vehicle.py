@@ -1,0 +1,73 @@
+from pyglm import glm
+from framework.objects import MeshObject, Object
+from framework.shapes import Cube, Cylinder
+from framework.shapes.trapezoid import Trapezoid
+from framework.materials import Material
+
+# Shared Materials Builder
+def get_materials():
+    # grey body
+    body = Material()
+    body.diffuse_strength = 0.6
+    body.specular_strength = 0.9
+    body.shininess = 64.0
+    
+    # black wheels
+    wheel = Material()
+    wheel.diffuse_strength = 0.2
+    
+    # window glass (black shiny)
+    glass = Material()
+    glass.diffuse_strength = 0.1
+    glass.specular_strength = 1.0
+    glass.shininess = 128.0
+    
+    # glow
+    glow = Material()
+    glow.ambient_strength = 2.0
+    glow.diffuse_strength = 0.0
+    
+    return body, wheel, glass, glow
+
+class BaseVehicle(Object):
+    def __init__(self, transform=glm.mat4(1.0)):
+        super().__init__(transform)
+        self.parts = []
+        self.body_mat, self.wheel_mat, self.glass_mat, self.glow_mat = get_materials()
+        self.create_geometry()
+        
+    def regenerate(self):
+        self.parts = []
+        self.create_geometry()
+
+    def create_geometry(self):
+        pass
+        
+    def draw(self, camera, lights):
+        for part in self.parts:
+            part.transform = self.transform * part.local_transform
+            part.draw(camera, lights)
+            
+    def add_box(self, color, size, pos, mat):
+        mesh = Cube(color=color, side_length=1.0)
+        s = glm.scale(size)
+        t = glm.translate(pos)
+        obj = MeshObject(mesh, mat, t * s)
+        obj.local_transform = t * s
+        self.parts.append(obj)
+
+    def add_trap(self, color, size, pos, taper, mat):
+        mesh = Trapezoid(color=color, side_length=1.0, taper_ratio=taper)
+        s = glm.scale(size)
+        t = glm.translate(pos)
+        obj = MeshObject(mesh, mat, t * s)
+        obj.local_transform = t * s
+        self.parts.append(obj)
+
+    def add_wheel(self, radius, width, pos):
+        mesh = Cylinder(radius=radius, height=width, segments=16, color=glm.vec4(0.2, 0.2, 0.2, 1.0))
+        rot = glm.rotate(glm.radians(90), glm.vec3(0, 0, 1))
+        t = glm.translate(pos)
+        obj = MeshObject(mesh, self.wheel_mat, t * rot)
+        obj.local_transform = t * rot
+        self.parts.append(obj)

@@ -5,6 +5,7 @@ from framework.objects.mesh_object import MeshObject
 from framework.shapes.car import Car
 from framework.shapes.uvsphere import UVSphere
 from framework.materials.material import Material
+from framework.shapes.cars.tank import Tank
 
 class CarAgent:
     # Shared Debug Shape (Static)
@@ -47,8 +48,6 @@ class CarAgent:
         self.is_reckless = is_reckless
 
         # Visuals
-        # Create a dedicated MeshObject for this agent
-        # We share the geometry (Car Shape) but have unique transform (MeshObject)
         if car_shape is None:
             # Color Logic
             if self.is_reckless:
@@ -61,7 +60,14 @@ class CarAgent:
             car_shape = Car(body_color=body_color)
             car_shape.createGeometry()
             
-        self.mesh_object = MeshObject(car_shape, Material())
+        # Determine if car_shape is a raw Geometry (Shape) or a Full Object (BaseVehicle)
+        from framework.shapes.shape import Shape
+        if isinstance(car_shape, Shape):
+             # Wrap raw geometry in a MeshObject
+             self.mesh_object = MeshObject(car_shape, Material())
+        else:
+             # Assume it is already a renderable Object (e.g. Tank, BaseVehicle)
+             self.mesh_object = car_shape
         
         # Randomize color slightly via material uniform? 
         # Car shape has baked colors. 
@@ -320,7 +326,7 @@ class CarAgent:
                     self.current_lane = None
                     # print(f"[DEBUG] [Car {self.id}] At Node {node.id} chose turn to Lane {next_lane.id}. Path Len: {len(self.path)}")
                 else:
-                    print(f"[ERROR] [Car {self.id}] At Node {node.id}: Selected connection {key} but could not find Next Lane object!")
+                    # print(f"[ERROR] [Car {self.id}] At Node {node.id}: Selected connection {key} but could not find Next Lane object!")
                     # Hard fail or Despawn? Despawn to be safe
                     self.deregister_from_lane(self.current_lane)
                     self.alive = False

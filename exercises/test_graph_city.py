@@ -19,6 +19,17 @@ import random
 from framework.camera import Flycamera
 from framework.light import PointLight
 import OpenGL.GL as gl
+from framework.shapes.cars.ambulance import Ambulance
+from framework.shapes.cars.bus import Bus
+from framework.shapes.cars.cyberpunk_car import CyberpunkCar
+from framework.shapes.cars.pickup import Pickup
+from framework.shapes.cars.policecar import PoliceCar
+from framework.shapes.cars.racecar import RaceCar # check casing if fails
+from framework.shapes.cars.sedan import Sedan
+from framework.shapes.cars.suv import SUV
+from framework.shapes.cars.tank import Tank
+from framework.shapes.cars.truck import Truck
+from framework.shapes.cars.van import Van
 
 import glfw
 import glm
@@ -332,12 +343,24 @@ def main():
                 if hasattr(edge, 'lanes') and edge.lanes:
                     lane = random.choice(edge.lanes)
                     
-                    # [NEW] Phase 5: Reckless Logic
                     is_reckless = (random.random() < reckless_chance[0])
-                    ag = CarAgent(lane, is_reckless=is_reckless)
+                    car_types = [
+                        Ambulance, Bus, CyberpunkCar, Pickup, PoliceCar, 
+                        Sedan, SUV, Tank, Truck, Van
+                    ]
+                    # Random Car Type
                     
-                    # Random color tweak?
-                    # ag.mesh_object.material.uniforms['color'] = ... (Need shader support)
+                    CarClass = random.choice(car_types)
+                    car_shape = CarClass()
+                    car_shape.create_geometry() # BaseVehicle needs this? 
+                    # Wait, BaseVehicle.create_geometry is called in its __init__?
+                    # Let's check vehicle.py BaseVehicle.__init__ from previous read.
+                    # Update: I read vehicle.py earlier. Init calls create_geometry. 
+                    # So car_shape = CarClass() is enough.
+                    
+                    ag = CarAgent(lane, car_shape=car_shape)
+                    
+                    # Random color tweak logic removed as these cars have fixed mats
                     
                     agents.append(ag)
                     glrenderer.addObject(ag.mesh_object)
