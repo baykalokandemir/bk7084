@@ -15,7 +15,11 @@ from framework.utils.mesh_generator import MeshGenerator
 from framework.utils.mesh_batcher import MeshBatcher
 from framework.utils.car_agent import CarAgent
 from framework.shapes.cube import Cube 
-from framework.objects.skybox import Skybox # [NEW]
+from framework.objects.skybox import Skybox
+from framework.shapes.quad import Quad
+from framework.objects.instanced_mesh_object import InstancedMeshObject
+from framework.objects.cloud import Cloud
+
 import random
 from framework.camera import Flycamera
 from framework.light import PointLight
@@ -27,6 +31,7 @@ import imgui
 from imgui.integrations.glfw import GlfwRenderer
 
 def main():
+
     # Robust Window Init
     try:
         window = OpenGLWindow(1280, 720, "Graph City Test - Hybrid Mode")
@@ -138,7 +143,6 @@ def main():
         # Don't forget the parks if you want them!
         for shape in getattr(adv_gen, 'parks', []):
              # Make parks green
-             import random # simplified color for now
              batcher_infra.add_shape(shape) 
             
         city_mesh_obj = batcher_infra.build(Material())
@@ -231,6 +235,19 @@ def main():
             glrenderer.addObject(fail_mesh)
             current_objects.append(fail_mesh)
         
+        # 6. [NEW] Generate Random Clouds
+        print("Scattering Clouds...")
+        for _ in range(15): 
+            # Random position above the city
+            cx = random.uniform(-180, 180)
+            cz = random.uniform(-180, 180)
+            cy = random.uniform(30, 60) # Height
+            c_scale = random.uniform(2.0, 5.0)
+            
+            # Create Cloud
+            cloud = Cloud(glrenderer, glm.vec3(cx, cy, cz), scale=c_scale)
+            current_objects.append(cloud.inst)
+
         print(f"Done. Nodes: {len(city_gen.graph.nodes)}, Edges: {len(city_gen.graph.edges)}")
             
     # Initial Gen
