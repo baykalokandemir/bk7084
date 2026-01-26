@@ -5,7 +5,7 @@ from framework.objects.mesh_object import MeshObject
 from framework.shapes.car import Car
 from framework.shapes.uvsphere import UVSphere
 from framework.materials.material import Material
-from framework.shapes.cars.tank import Tank
+from framework.utils.vehicle_merger import VehicleMerger
 
 class CarAgent:
     # Shared Debug Shape (Static)
@@ -63,11 +63,16 @@ class CarAgent:
         # Determine if car_shape is a raw Geometry (Shape) or a Full Object (BaseVehicle)
         from framework.shapes.shape import Shape
         if isinstance(car_shape, Shape):
-             # Wrap raw geometry in a MeshObject
-             self.mesh_object = MeshObject(car_shape, Material())
+            # Already a single shape
+            self.mesh_object = MeshObject(car_shape, Material())
         else:
-             # Assume it is already a renderable Object (e.g. Tank, BaseVehicle)
-             self.mesh_object = car_shape
+            # It's a BaseVehicle with multiple parts - MERGE IT
+            merged_shape = VehicleMerger.merge_vehicle(car_shape)
+            
+            # Use appropriate material (body material as default)
+            mat = car_shape.body_mat if hasattr(car_shape, 'body_mat') else Material()
+            
+            self.mesh_object = MeshObject(merged_shape, mat)
         
         # Randomize color slightly via material uniform? 
         # Car shape has baked colors. 
