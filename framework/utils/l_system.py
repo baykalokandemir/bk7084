@@ -2,11 +2,12 @@ from pyglm import glm
 import random
 
 class LSystem:
-    def __init__(self, axiom="F", rules=None, angle=30.0, length=2.0):
+    def __init__(self, axiom="F", rules=None, angle=30.0, length=2.0, angle_range=None):
         self.axiom = axiom
         self.rules = rules if rules is not None else {"F": "F[+F][-F]"}
         self.angle = glm.radians(angle)
         self.length = length
+        self.angle_range = angle_range # Tuple (min_deg, max_deg)
 
     def generate_string(self, iterations=2):
         s = self.axiom
@@ -16,6 +17,12 @@ class LSystem:
                 next_s += self.rules.get(char, char)
             s = next_s
         return s
+        
+    def get_turn_angle(self):
+        if self.angle_range:
+            deg = random.uniform(self.angle_range[0], self.angle_range[1])
+            return glm.radians(deg)
+        return self.angle
 
     def interpret_transforms(self, s, max_points=None):
         """
@@ -23,58 +30,42 @@ class LSystem:
         Returns at most max_points transforms (if specified).
         """
         stack = []
-        # State: position, rotation (quat or angle?), length
-        # Simple turtle in 3D:
-        # Start at origin, pointing UP (Y axis) or FORWARD (Z axis)?
-        # Let's say Y axis to build trees.
         
         pos = glm.vec3(0, 0, 0)
-        heading = glm.vec3(0, 1, 0) # Up
-        # We need a full orientation matrix/quat ideally.
-        # Let's use a 4x4 matrix as state.
         current_transform = glm.mat4(1.0)
         
         results = []
         
-        # Helper to append current state
         def add_result(mat):
             if max_points is None or len(results) < max_points:
-                results.append(glm.mat4(mat)) # Copy
+                results.append(glm.mat4(mat)) 
 
-        # We assume F means "Move forward AND place an object there" or "Draw line".
-        # For object placement, we usually place at the start or end of the segment.
-        # Let's place at the END of the move.
-        
         for char in s:
             if max_points is not None and len(results) >= max_points:
                 break
                 
             if char == "F":
-                # Move forward along LOCAL Y axis of current transform
-                # translate(0, length, 0)
                 move = glm.translate(glm.vec3(0, self.length, 0))
                 current_transform = current_transform * move
-                
-                # capture position
                 add_result(current_transform)
                 
             elif char == "+": # Rotate Z
-                rot = glm.rotate(self.angle, glm.vec3(0, 0, 1))
+                rot = glm.rotate(self.get_turn_angle(), glm.vec3(0, 0, 1))
                 current_transform = current_transform * rot
             elif char == "-": # Rotate -Z
-                rot = glm.rotate(-self.angle, glm.vec3(0, 0, 1))
+                rot = glm.rotate(-self.get_turn_angle(), glm.vec3(0, 0, 1))
                 current_transform = current_transform * rot
             elif char == "&": # Rotate X
-                rot = glm.rotate(self.angle, glm.vec3(1, 0, 0))
+                rot = glm.rotate(self.get_turn_angle(), glm.vec3(1, 0, 0))
                 current_transform = current_transform * rot
             elif char == "^": # Rotate -X
-                rot = glm.rotate(-self.angle, glm.vec3(1, 0, 0))
+                rot = glm.rotate(-self.get_turn_angle(), glm.vec3(1, 0, 0))
                 current_transform = current_transform * rot
             elif char == "\\": # Rotate Y
-                rot = glm.rotate(self.angle, glm.vec3(0, 1, 0))
+                rot = glm.rotate(self.get_turn_angle(), glm.vec3(0, 1, 0))
                 current_transform = current_transform * rot
             elif char == "/": # Rotate -Y
-                rot = glm.rotate(-self.angle, glm.vec3(0, 1, 0))
+                rot = glm.rotate(-self.get_turn_angle(), glm.vec3(0, 1, 0))
                 current_transform = current_transform * rot
             elif char == "[":
                 stack.append(glm.mat4(current_transform))
@@ -100,23 +91,15 @@ class HologramLSystem:
                      size_limit=4,
                      grid_spacing=0.2, 
                      color=glm.vec3(0,1,1),
-                     use_point_cloud=True):
+                     use_point_cloud=True,
+                     length=2.0,
+                     angle=45.0,
+                     angle_range=None):
         """
         Generates a group of MeshObjects based on an L-System.
-        
-        Args:
-            root_transform (glm.mat4): The parent transform for the whole group.
-            source_shapes_pool (list): A list of Shape objects to cycle through.
-            axiom (str): Start string.
-            rules (dict): Production rules.
-            iterations (int): Number of recursions.
-            size_limit (int): Max number of objects to spawn.
-            
-        Returns:
-            list[MeshObject]: The generated objects.
         """
         
-        lsys = LSystem(axiom=axiom, rules=rules, length=2.0, angle=45.0)
+        lsys = LSystem(axiom=axiom, rules=rules, length=length, angle=angle, angle_range=angle_range)
         s = lsys.generate_string(iterations)
         local_transforms = lsys.interpret_transforms(s, max_points=size_limit)
         
