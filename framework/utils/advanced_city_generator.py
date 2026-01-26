@@ -32,7 +32,7 @@ class AdvancedCityGenerator:
         self.road_network = None
         self.street_light_poses = [] # List of glm.mat4
 
-    def generate(self):
+    def generate(self, texture_list=None):
         self.blocks = []
         self.lots = []
         self.buildings = []
@@ -135,6 +135,11 @@ class AdvancedCityGenerator:
         # 6. Generate Buildings
         from .building import Building 
         
+        if texture_list and len(texture_list) > 0:
+            available_textures = texture_list
+        else:
+            available_textures = ["brick1.png", "brick2.jpg", "brick3.jpg", "brick4.jpg", "concrete.jpg", "tile.jpg"]
+        
         for lot in self.lots:
             # Random Corner Style
             r = random.random()
@@ -153,7 +158,8 @@ class AdvancedCityGenerator:
                 "color": glm.vec4(random.uniform(0.7, 0.9), random.uniform(0.7, 0.9), random.uniform(0.7, 0.9), 1.0),
                 "window_color": glm.vec4(0.1, 0.2, 0.3 + random.random()*0.3, 1.0),
                 "stepped": (height > 25.0) and (random.random() < 0.4), 
-                "window_style": "vertical_stripes" if random.random() < 0.5 else "single"
+                "window_style": "vertical_stripes" if random.random() < 0.5 else "single",
+                "texture": random.choice(available_textures)
             }
             
             building = Building(lot, height, style)
