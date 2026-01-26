@@ -2,12 +2,12 @@ from pyglm import glm
 import random
 import OpenGL.GL as gl
 from .l_system import LSystem
-from .hologram_wrapper import HologramWrapper
+from .grid_point_cloud_generator import GridPointCloudGenerator
 from ..shapes import Cube, UVSphere, Cylinder, Cone
 from ..materials import Material
 from ..objects import MeshObject
 
-class HologramCluster:
+class Holograms3D:
     def __init__(self, root_position=glm.vec3(0, -1.0, 0)):
         self.objects = []
         self.root_position = root_position
@@ -17,7 +17,6 @@ class HologramCluster:
         self.group_speed = 0.3
         
         # Internal storage for individual animations
-        # List of dicts: { 'obj': MeshObject, 'initial_local_transform': mat4, 'axis': vec3, 'speed': float, 'angle': float }
         self._anim_data = [] 
         
     def regenerate(self, config):
@@ -54,12 +53,12 @@ class HologramCluster:
             pool_idx += 1
             
             if config.USE_POINT_CLOUD:
-                # Wrap as Hologram
-                obj = HologramWrapper.create(
+                # Wrap as Hologram (Internal Helper)
+                obj = self._create_hologram_object(
                     shape,
                     spacing=config.GRID_SPACING,
                     color=glm.vec3(*config.POINT_CLOUD_COLOR),
-                    transform=local_t # Initial placement is purely local L-System layout
+                    transform=local_t
                 )
             else:
                 # Solid / Slice Mode
@@ -67,8 +66,6 @@ class HologramCluster:
                     shape.createGeometry()
                     shape.createBuffers()
                 
-                # We need to clone the shape logic or just use MeshObject. 
-                # MeshObject shares VAO.
                 obj = MeshObject(shape, slice_mat, transform=local_t, draw_mode=gl.GL_TRIANGLES)
             
             self.objects.append(obj)
@@ -96,11 +93,6 @@ class HologramCluster:
             spin_rot = glm.rotate(data['angle'], data['axis'])
             
             # Compose: Parent * LSystemPos * Spin
-            # Note: LSystemPos (initial_local_transform) includes the translation from the center of the cluster.
-            # If we do LSystemPos * Spin, we spin in place at that offset? 
-            # Yes, because LSystem logic T matrix is T * R * S. 
-            # If we append Spin: T * R * S * Spin. Spin happens in local object space. Correct.
-            
             local_final = data['initial_local_transform'] * spin_rot
             
             # Apply Global
@@ -109,8 +101,33 @@ class HologramCluster:
     def update_uniforms(self, config, time):
         """Updates visual uniforms (color, size, etc)."""
         for obj in self.objects:
-             if hasattr(obj.material, 'uniforms'):
+             # Check if it has our custom uniforms (not slice mat)
+             # Slice mat has different uniform names
+             if hasattr(obj.material, 'uniforms') and "enable_glow" in obj.material.uniforms:
                  obj.material.uniforms["enable_glow"] = config.ENABLE_GLOW
                  obj.material.uniforms["base_color"] = glm.vec3(*config.POINT_CLOUD_COLOR)
                  obj.material.uniforms["point_size"] = config.POINT_SIZE
                  obj.material.uniforms["time"] = time
+
+    def _create_hologram_object(self, source_shape, spacing, color, transform):
+        """Internal helper to create a Point Cloud MeshObject."""
+        # 1. Generate Point Cloud Geometry
+        pc_shape = GridPointCloudGenerator.generate(source_shape, spacing=spacing)
+        pc_shape.createBuffers()
+        
+        # 2. Create Unique Material Instance
+        mat = Material(vertex_shader="mikoshi_shader.vert", fragment_shader="mikoshi_shader.frag")
+        
+        # 3. Configure Material Uniforms (Defaults)
+        mat.uniforms["enable_glow"] = True
+        mat.uniforms["is_point_mode"] = True
+        mat.uniforms["base_color"] = color
+        mat.uniforms["point_size"] = 10.0
+        mat.uniforms["shape_type"] = 0
+        mat.uniforms["anim_x"] = True 
+        mat.uniforms["anim_y"] = True 
+        mat.uniforms["time"] = 0.0
+        
+        # 4. Create and Return MeshObject
+        obj = MeshObject(pc_shape, mat, transform=transform, draw_mode=gl.GL_POINTS)
+        return obj

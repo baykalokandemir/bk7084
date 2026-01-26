@@ -4,12 +4,7 @@ from framework.camera import *
 from framework.renderer import *
 from framework.light import *
 from framework.ui_manager import UIManager
-from framework.shapes import UVSphere, Cube, Cylinder, Cone
-from framework.objects import MeshObject
-from framework.utils.hologram_wrapper import HologramWrapper
-from framework.utils.l_system import HologramLSystem
-from framework.utils.hologram_cluster import HologramCluster
-
+from framework.utils.holograms_3d import Holograms3D
 from framework.materials import Material
 from pyglm import glm
 import OpenGL.GL as gl
@@ -56,7 +51,7 @@ class SceneManager:
         self.slice_mat = Material(vertex_shader="slice_shader.vert", fragment_shader="slice_shader.frag")
         self.slice_offset = 0.0
         self.objects = []
-        self.cluster = HologramCluster()
+        self.cluster = Holograms3D()
 
     def generate_scene(self, config):
         self.cluster.regenerate(config)
