@@ -48,6 +48,7 @@ def main():
         "is_point_mode": True,
         "auto_rotate": True,
         "color": [0.0, 1.0, 1.0],
+        "enable_glow": True,
         # Post Process
         "use_aberration": False,
         "aberration_strength": [0.005],
@@ -105,6 +106,7 @@ def main():
             _, ui_state["point_shape"][0] = imgui.combo("Point Shape", ui_state["point_shape"][0], ["Circle", "Square"])
             _, ui_state["color"] = imgui.color_edit3("Base Color", *ui_state["color"])
             
+            _, ui_state["enable_glow"] = imgui.checkbox("Enable Glow", ui_state["enable_glow"])
             _, ui_state["anim_x"] = imgui.checkbox("Anim X Offset", ui_state["anim_x"])
             _, ui_state["anim_y"] = imgui.checkbox("Anim Y Offset", ui_state["anim_y"])
         
@@ -156,7 +158,7 @@ def main():
             u = current_mesh_obj.material.uniforms
             u["point_size"] = ui_state["point_size"][0]
             u["shape_type"] = int(ui_state["point_shape"][0])
-            u["enable_glow"] = True # Always on for this test
+            u["enable_glow"] = ui_state["enable_glow"]
             u["base_color"] = glm.vec3(*ui_state["color"])
             u["time"] = current_time
             u["anim_x"] = ui_state["anim_x"]
