@@ -16,13 +16,20 @@ class HologramConfig:
     L_ANGLE_MAX = 120.0
     
     # Hologram Settings
-    GRID_SPACING = 0.2
-    POINT_SIZE = 20.0
+    GRID_SPACING = 0.40
+    POINT_SIZE = 100.0
     POINT_SHAPE = 1 # 0: Circle, 1: Square
     POINT_SHAPES = ["Circle", "Square"]
     POINT_CLOUD_COLOR = [0.0, 0.9, 1.0] # Cyan
     ENABLE_GLOW = True
     USE_POINT_CLOUD = True
+    
+    # Slice Shader Settings
+    SLICE_SPACING = 1.0
+    SLICE_THICKNESS = 0.1
+    SLICE_NORMAL = [1.0, 0.6, 0.0]
+    SLICE_WARP = 0.03
+    SLICE_SPEED = 0.025
     
     # Post Process shared? Or per-object?
     # Usually post-process is global, but these are object properties.
@@ -126,11 +133,21 @@ class Holograms3D:
         for obj in self.objects:
              # Check if it has our custom uniforms (not slice mat)
              # Slice mat has different uniform names
-             if hasattr(obj.material, 'uniforms') and "enable_glow" in obj.material.uniforms:
-                 obj.material.uniforms["enable_glow"] = config.ENABLE_GLOW
-                 obj.material.uniforms["base_color"] = glm.vec3(*config.POINT_CLOUD_COLOR)
-                 obj.material.uniforms["point_size"] = config.POINT_SIZE
-                 obj.material.uniforms["time"] = time
+            if hasattr(obj.material, 'uniforms') and "enable_glow" in obj.material.uniforms:
+                obj.material.uniforms["enable_glow"] = config.ENABLE_GLOW
+                obj.material.uniforms["base_color"] = glm.vec3(*config.POINT_CLOUD_COLOR)
+                obj.material.uniforms["point_size"] = config.POINT_SIZE
+                obj.material.uniforms["time"] = time
+            elif hasattr(obj.material, 'vertex_shader') and "slice_shader" in obj.material.vertex_shader:
+                # Update Slice Shader Uniforms
+                offset = time * config.SLICE_SPEED
+                
+                obj.material.uniforms["slice_spacing"] = config.SLICE_SPACING
+                obj.material.uniforms["slice_thickness"] = config.SLICE_THICKNESS
+                obj.material.uniforms["slice_normal"] = glm.vec3(*config.SLICE_NORMAL)
+                obj.material.uniforms["warp_factor"] = config.SLICE_WARP
+                obj.material.uniforms["slice_offset"] = offset
+                obj.material.uniforms["color"] = glm.vec3(*config.POINT_CLOUD_COLOR)
 
     def _create_hologram_object(self, source_shape, spacing, color, transform):
         """Internal helper to create a Point Cloud MeshObject."""

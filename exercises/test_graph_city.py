@@ -139,10 +139,29 @@ def main():
         print(f"Generating {target_hologram_count[0]} holograms...")
         
         for i in range(target_hologram_count[0]):
-             # City is XZ.
-             rx = random.uniform(-180, 180)
-             rz = random.uniform(-180, 180)
-             pos = glm.vec3(rx, 40.0, rz)
+             # Random Pos with Spacing Check
+             pos = glm.vec3(0, 40.0, 0)
+             valid = False
+             for attempt in range(10):
+                 rx = random.uniform(-180, 180)
+                 rz = random.uniform(-180, 180)
+                 candidate = glm.vec3(rx, 40.0, rz)
+                 
+                 # Check distance to existing
+                 too_close = False
+                 for h in holograms:
+                     if glm.distance(candidate, h.root_position) < 80.0:
+                         too_close = True
+                         break
+                 
+                 if not too_close:
+                     pos = candidate
+                     valid = True
+                     break
+            
+             if not valid:
+                 # Fallback to random if crowded
+                 pos = glm.vec3(random.uniform(-180, 180), 40.0, random.uniform(-180, 180))
              
              # Create Config
              cfg = HologramConfig()
@@ -153,16 +172,24 @@ def main():
              # Neon Palette (0-255)
              palette = [
                  (0, 240, 255),  # Cyan
-                 
-                 #(116, 238, 21),  # Lime
-                 #(255, 231, 0),   # Yellow
-                 #(240, 0, 255),   # Magenta
-                 #(245, 39, 137)   # Pink
+                 (116, 238, 21),  # Lime
+                 (255, 231, 0),   # Yellow
+                 (240, 0, 255),   # Magenta
+                 (245, 39, 137)   # Pink
              ]
              choice = random.choice(palette)
              # Normalize (0-1) and Boost (x3.0) for glow
              rgb = [(c / 255.0) * 3.0 for c in choice]
              cfg.POINT_CLOUD_COLOR = list(rgb)
+             
+             # Random Render Mode
+             if random.random() < 0.5:
+                 cfg.USE_POINT_CLOUD = True
+             else:
+                 cfg.USE_POINT_CLOUD = False
+                 # Random Slice Params
+                 cfg.SLICE_NORMAL = [random.random(), random.random(), random.random()]
+                 cfg.SLICE_SPEED = random.uniform(0.05, 0.2)
              
              # Create Logic
              holo = Holograms3D(root_position=pos, scale=5.0)
