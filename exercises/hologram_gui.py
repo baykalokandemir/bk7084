@@ -79,7 +79,7 @@ def main():
     glfw.set_char_callback(win.window, char_callback_wrapper)
 
     # 5. Load Texture
-    tex_path = os.path.join(BASE_DIR, "assets", "hologram.jpg")
+    tex_path = os.path.join(BASE_DIR, "assets/billboards/", "atari.jpg")
     if not os.path.exists(tex_path):
         print(f"Warning: Texture not found at {tex_path}")
         tex = None

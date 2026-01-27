@@ -96,6 +96,13 @@ def main():
     crash_events = [] # [NEW] Phase 3: Store impact positions
     total_crashes = [0] # [NEW] Phase 6: Global Crash Counter
 
+    # [NEW] Camera Tracking State
+    tracking_state = {
+        "is_tracking": False, 
+        "target_id": 0,
+        "found": False # Feedback for GUI
+    }
+
     def detect_crashes(active_agents):
         """
         Phase 3: Spatial Hash Collision Detection
@@ -366,7 +373,45 @@ def main():
     # Main Loop
     while not glfw.window_should_close(window.window):
         impl.process_inputs()
-        camera.update(0.016)
+        
+        # Camera Update Logic
+        if not tracking_state["is_tracking"]:
+            camera.update(0.016)
+        else:
+            # Tracking Mode
+            target_agent = None
+            for a in agents:
+                if a.id == tracking_state["target_id"]:
+                    target_agent = a
+                    break
+            
+            tracking_state["found"] = (target_agent is not None)
+            
+            if target_agent:
+                # Third Person View: Behind and above
+                # orientation is normalized forward vector
+                offset_dist = 15.0
+                height_offset = 6.0
+                
+                # Position: Target - (Fwd * Dist) + Up
+                desired_pos = target_agent.position - (target_agent.orientation * offset_dist) + glm.vec3(0, height_offset, 0)
+                camera.position = desired_pos
+                
+                # Look At Target (slightly above center to see road)
+                look_target = target_agent.position + glm.vec3(0, 2.0, 0)
+                camera.front = glm.normalize(look_target - camera.position)
+                
+                # Update View Matrix directly
+                camera.updateView()
+                
+                # Sync Euler Angles to prevent snapping when tracking ends
+                # Pitch (X) - clamp to avoid singularity
+                pitch_rad = glm.asin(max(min(camera.front.y, 1.0), -1.0)) 
+                camera.euler_angles.x = glm.degrees(pitch_rad)
+                
+                # Yaw (Y)
+                # atan2(z, x) corresponds to the standard mapping used in Flycamera
+                camera.euler_angles.y = glm.degrees(glm.atan(camera.front.z, camera.front.x))
         
         # --- Traffic Simulation ---
         # 1. Spawn / Despawn
@@ -544,6 +589,25 @@ def main():
         imgui.text(f"Edges: {len(city_gen.graph.edges)}")
         imgui.text("Green = Forward Lane")
         imgui.text("Red = Backward Lane")
+
+        imgui.separator()
+        imgui.text("Camera Tracking")
+        
+        # Input Int for ID
+        changed, tracking_state["target_id"] = imgui.input_int("Car ID", tracking_state["target_id"])
+        
+        if not tracking_state["is_tracking"]:
+            if imgui.button("Track Car"):
+                tracking_state["is_tracking"] = True
+        else:
+            if imgui.button("Stop Tracking"):
+                tracking_state["is_tracking"] = False
+            
+            imgui.same_line()
+            if tracking_state["found"]:
+                imgui.text_colored("Following", 0.0, 1.0, 0.0)
+            else:
+                imgui.text_colored("Not Found", 1.0, 0.0, 0.0)
             
         imgui.end()
         imgui.render()
