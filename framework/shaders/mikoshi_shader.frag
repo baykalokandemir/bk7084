@@ -53,10 +53,10 @@ void main()
     // Color based on distance
     vec3 deep_blue = base_color * 0.2; // Darker version of base color
     vec3 cyan = base_color;
-    vec3 hot_white = vec3(1.0, 1.0, 1.0);
+    vec3 hot_white = mix(base_color, vec3(1.0), 0.5);
     
     // Mix based on distance (closer = cyan, further = blue)
-    float mix_factor = 1.0 / (dist_to_cam * 0.2 + 0.1);
+    float mix_factor = 1.0 / (dist_to_cam * 0.05 + 0.1);
     mix_factor = clamp(mix_factor, 0.0, 1.0);
     
     vec3 color = mix(deep_blue, cyan, mix_factor);

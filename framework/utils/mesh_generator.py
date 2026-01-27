@@ -58,27 +58,13 @@ class MeshGenerator:
                     
                     verts.append(v1)
                     verts.append(v2)
-                    colors.append(color)
-                    colors.append(color)
-        
-        # Draw Intersection Connections (Curves)
-        c_curve = glm.vec4(0.0, 1.0, 1.0, 1.0) # Cyan
-        
-        for node in graph.nodes:
-            for curve_points in node.connections.values():
-                if len(curve_points) < 2: continue
-                
-                for i in range(len(curve_points) - 1):
-                    p1 = curve_points[i]
-                    p2 = curve_points[i+1]
                     
-                    v1 = glm.vec4(p1.x, y_off, p1.z, 1.0)
-                    v2 = glm.vec4(p2.x, y_off, p2.z, 1.0)
-                    
-                    verts.append(v1)
-                    verts.append(v2)
-                    colors.append(c_curve)
-                    colors.append(c_curve)
+                    # [MODIFIED] Static Lanes = White (faint)
+                    c_white = glm.vec4(1.0, 1.0, 1.0, 0.3)
+                    colors.append(c_white)
+                    colors.append(c_white)
+        
+        # [MODIFIED] Removed Curves Loop (Moved to dynamic)
             
         # Pack into Shape
         if not verts: return Shape()
@@ -89,6 +75,66 @@ class MeshGenerator:
         # Set Normals to UP to catch light (Lines don't have real normals)
         shape.normals = np.tile([0.0, 1.0, 0.0], (len(verts), 1)).astype(np.float32)
         
+        shape.uvs = np.zeros((len(verts), 2), dtype=np.float32)
+        shape.indices = np.array(range(len(verts)), dtype=np.uint32)
+        
+        return shape
+
+    def generate_dynamic_signals(self, graph):
+        """
+        [NEW] dynamic traffic signals.
+        Returns a Shape containing intersection curves colored by their current signal state.
+        This should be called every frame or few frames.
+        """
+        shape = Shape()
+        verts = []
+        colors = []
+        
+        y_off = 0.8 # Same height as lanes
+        
+        c_green = glm.vec4(0.0, 1.0, 0.0, 1.0)
+        c_yellow = glm.vec4(1.0, 1.0, 0.0, 1.0)
+        c_red = glm.vec4(1.0, 0.0, 0.0, 1.0)
+        
+        for node in graph.nodes:
+            # We need to map connections (which store geometry) to signal state (which is per Incoming Lane).
+            # Connection key is (from_lane_id, to_lane_id)
+            
+            for key, curve_points in node.connections.items():
+                if len(curve_points) < 2: continue
+                
+                from_lane_id = key[0]
+                
+                # Get Signal State
+                state = node.get_signal(from_lane_id)
+                
+                # Map Color
+                if state == "GREEN":
+                    cc = c_green
+                elif state == "YELLOW":
+                    cc = c_yellow
+                else:
+                    cc = c_red
+                    
+                # Draw Curve
+                for i in range(len(curve_points) - 1):
+                    p1 = curve_points[i]
+                    p2 = curve_points[i+1]
+                    
+                    v1 = glm.vec4(p1.x, y_off, p1.z, 1.0)
+                    v2 = glm.vec4(p2.x, y_off, p2.z, 1.0)
+                    
+                    verts.append(v1)
+                    verts.append(v2)
+                    colors.append(cc)
+                    colors.append(cc)
+
+        # Pack
+        if not verts: return Shape()
+        
+        shape.vertices = np.array([v.to_list() for v in verts], dtype=np.float32)
+        shape.colors = np.array([c.to_list() for c in colors], dtype=np.float32)
+        shape.normals = np.tile([0.0, 1.0, 0.0], (len(verts), 1)).astype(np.float32)
         shape.uvs = np.zeros((len(verts), 2), dtype=np.float32)
         shape.indices = np.array(range(len(verts)), dtype=np.uint32)
         
