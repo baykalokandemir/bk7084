@@ -87,7 +87,9 @@ def main():
     print_stuck_debug = [False]
     print_stuck_debug = [False]
     print_despawn_debug = [False]
+    print_despawn_debug = [False]
     show_clouds = [True] # [NEW] Toggle Clouds
+    show_holograms = [True] # [NEW] Toggle Holograms
 
     # Store explicit references
     current_objects = []
@@ -237,8 +239,9 @@ def main():
              holo.regenerate(cfg)
              
              # Register Objects
-             for obj in holo.objects:
-                 glrenderer.addObject(obj)
+             if show_holograms[0]:
+                 for obj in holo.objects:
+                     glrenderer.addObject(obj)
                  
              holograms.append(holo)
              hologram_configs.append(cfg)
@@ -394,7 +397,7 @@ def main():
             # Random position above the city
             cx = random.uniform(-180, 180)
             cz = random.uniform(-180, 180)
-            cy = random.uniform(30, 60) # Height
+            cy = random.uniform(80, 120) # Height - Moved Higher [USER]
             c_scale = random.uniform(2.0, 5.0)
             
             # Create Cloud
@@ -452,6 +455,7 @@ def main():
             
         _, show_buildings[0] = imgui.checkbox("Show Buildings", show_buildings[0])
         _, show_clouds[0] = imgui.checkbox("Show Clouds", show_clouds[0])
+        _, show_holograms[0] = imgui.checkbox("Show Holograms", show_holograms[0])
         _, crash_debug[0] = imgui.checkbox("Crash Debug", crash_debug[0])
         _, print_stuck_debug[0] = imgui.checkbox("Print Stuck Debug", print_stuck_debug[0])
         _, print_despawn_debug[0] = imgui.checkbox("Print Despawn Debug", print_despawn_debug[0])
@@ -649,6 +653,15 @@ def main():
                  glrenderer.addObject(cloud.inst)
              elif not show_clouds[0] and is_in:
                  glrenderer.objects.remove(cloud.inst)
+
+        # Sync Holograms
+        for holo in holograms:
+            for obj in holo.objects:
+                is_in = obj in glrenderer.objects
+                if show_holograms[0] and not is_in:
+                    glrenderer.addObject(obj)
+                elif not show_holograms[0] and is_in:
+                    glrenderer.objects.remove(obj)
         
         glrenderer.render()
         
