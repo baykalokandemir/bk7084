@@ -5,6 +5,7 @@ from framework.objects.mesh_object import MeshObject
 from framework.shapes.car import Car
 from framework.shapes.uvsphere import UVSphere
 from framework.materials.material import Material
+from framework.utils.vehicle_merger import VehicleMerger
 
 class CarAgent:
     # Shared Debug Shape (Static)
@@ -47,8 +48,6 @@ class CarAgent:
         self.is_reckless = is_reckless
 
         # Visuals
-        # Create a dedicated MeshObject for this agent
-        # We share the geometry (Car Shape) but have unique transform (MeshObject)
         if car_shape is None:
             # Color Logic
             if self.is_reckless:
@@ -61,7 +60,19 @@ class CarAgent:
             car_shape = Car(body_color=body_color)
             car_shape.createGeometry()
             
-        self.mesh_object = MeshObject(car_shape, Material())
+        # Determine if car_shape is a raw Geometry (Shape) or a Full Object (BaseVehicle)
+        from framework.shapes.shape import Shape
+        if isinstance(car_shape, Shape):
+            # Already a single shape
+            self.mesh_object = MeshObject(car_shape, Material())
+        else:
+            # It's a BaseVehicle with multiple parts - MERGE IT
+            merged_shape = VehicleMerger.merge_vehicle(car_shape)
+            
+            # Use appropriate material (body material as default)
+            mat = car_shape.body_mat if hasattr(car_shape, 'body_mat') else Material()
+            
+            self.mesh_object = MeshObject(merged_shape, mat)
         
         # Randomize color slightly via material uniform? 
         # Car shape has baked colors. 
@@ -320,7 +331,7 @@ class CarAgent:
                     self.current_lane = None
                     # print(f"[DEBUG] [Car {self.id}] At Node {node.id} chose turn to Lane {next_lane.id}. Path Len: {len(self.path)}")
                 else:
-                    print(f"[ERROR] [Car {self.id}] At Node {node.id}: Selected connection {key} but could not find Next Lane object!")
+                    # print(f"[ERROR] [Car {self.id}] At Node {node.id}: Selected connection {key} but could not find Next Lane object!")
                     # Hard fail or Despawn? Despawn to be safe
                     self.deregister_from_lane(self.current_lane)
                     self.alive = False

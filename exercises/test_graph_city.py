@@ -7,7 +7,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 from framework.window import OpenGLWindow
 from framework.renderer import GLRenderer
 from framework.objects import MeshObject
-from framework.materials import Material
+from framework.materials import Material, Texture
 from framework.utils.city_generator import CityGenerator
 from framework.utils.advanced_city_generator import AdvancedCityGenerator
 from framework.utils.mesh_generator import MeshGenerator
@@ -23,6 +23,17 @@ import random
 from framework.camera import Flycamera
 from framework.light import PointLight
 import OpenGL.GL as gl
+from framework.shapes.cars.ambulance import Ambulance
+from framework.shapes.cars.bus import Bus
+from framework.shapes.cars.cyberpunk_car import CyberpunkCar
+from framework.shapes.cars.pickup import Pickup
+from framework.shapes.cars.policecar import PoliceCar
+from framework.shapes.cars.racecar import RaceCar # check casing if fails
+from framework.shapes.cars.sedan import Sedan
+from framework.shapes.cars.suv import SUV
+from framework.shapes.cars.tank import Tank
+from framework.shapes.cars.truck import Truck
+from framework.shapes.cars.van import Van
 
 import glfw
 import glm
@@ -81,7 +92,7 @@ def main():
     # Store explicit references
     current_objects = []
     city_mesh_obj = None
-    building_mesh_obj = None
+    building_mesh_objs = [] # List of MeshObjects (one per texture)
     debug_mesh_obj = None
     signal_mesh_obj = None 
     crash_shape = None 
@@ -100,6 +111,13 @@ def main():
     total_crashes = [0] 
     clouds = [] # [NEW]
 
+
+    # [NEW] Camera Tracking State
+    tracking_state = {
+        "is_tracking": False, 
+        "target_id": 0,
+        "found": False # Feedback for GUI
+    }
 
     def detect_crashes(active_agents):
         """
@@ -226,7 +244,7 @@ def main():
              hologram_configs.append(cfg)
 
     def regenerate():
-        nonlocal current_objects, city_mesh_obj, building_mesh_obj, debug_mesh_obj, signal_mesh_obj, agents, city_gen, crash_shape, holograms, hologram_configs
+        nonlocal current_objects, city_mesh_obj, building_mesh_objs, debug_mesh_obj, signal_mesh_obj, agents, city_gen, crash_shape, holograms, hologram_configs
         
         # Clear old objects
         for obj in current_objects:
@@ -234,10 +252,8 @@ def main():
                 glrenderer.objects.remove(obj)
         current_objects = []
         city_mesh_obj = None
-        building_mesh_obj = None
-        building_mesh_obj = None
+        building_mesh_objs = []
         debug_mesh_obj = None
-        signal_mesh_obj = None
         signal_mesh_obj = None
         clouds[:] = [] # Clear clouds list
         crash_events[:] = [] # Clear list in place
@@ -259,8 +275,19 @@ def main():
         
         # 1. Generate BSP Layout
         print("Generating BSP Layout...")
+        
+        # Scan for textures
+        texture_dir = os.path.join(os.path.dirname(__file__), "assets", "building_textures")
+        found_textures = []
+        if os.path.exists(texture_dir):
+            for f in os.listdir(texture_dir):
+                if f.lower().endswith(('.png', '.jpg', '.jpeg')):
+                    found_textures.append(f)
+        else:
+            print(f"Warning: Texture directory {texture_dir} not found.")
+
         adv_gen = AdvancedCityGenerator(width=400, depth=400)
-        adv_gen.generate()
+        adv_gen.generate(texture_list=found_textures)
         
         # 2. Build Traffic Graph
         print("Building Traffic Graph...")
@@ -278,15 +305,52 @@ def main():
             glrenderer.addObject(city_mesh_obj)
             current_objects.append(city_mesh_obj)
 
+        # Batch 2: Buildings (FROM BSP) - Multi-Texture Support
         print("Batching Buildings (BSP)...")
-        batcher_bldg = MeshBatcher()
-        for shape in adv_gen.buildings: batcher_bldg.add_shape(shape)
+        
+        texture_files = found_textures # Use the list we found earlier
+        texture_cache = {}
+        batchers = {}
+        
+        # Init Batchers and Load Textures
+        for t_name in texture_files:
+            batchers[t_name] = MeshBatcher()
+            # Load Texture
+            path = os.path.join(texture_dir, t_name) # Use texture_dir
+            if os.path.exists(path):
+                texture_cache[t_name] = Texture(file_path=path)
+            else:
+                print(f"Warning: Texture {path} not found.")
+                
+        # Fallback batcher for no texture
+        batchers["default"] = MeshBatcher()
+        
+        # Distribute Shapes
+        for shape in adv_gen.buildings:
+            t_name = getattr(shape, 'texture_name', 'default')
+            if t_name in batchers:
+                batchers[t_name].add_shape(shape)
+            else:
+                batchers["default"].add_shape(shape)
+                
+        # Build Meshes
+        for t_name, batcher in batchers.items():
+            if len(batcher.vertices) == 0: continue
             
-        building_mesh_obj = batcher_bldg.build(Material())
-        if building_mesh_obj:
-            current_objects.append(building_mesh_obj)
-            if show_buildings[0]:
-                glrenderer.addObject(building_mesh_obj)
+            mat = Material()
+            if t_name in texture_cache:
+                mat = Material(color_texture=texture_cache[t_name])
+                mat.specular_strength = 0.1 # Bricks aren't very shiny
+                mat.texture_scale = glm.vec2(1.0, 1.0) # UVs are already scaled in building.py
+            else:
+                mat.specular_strength = 0.5
+                
+            mesh_obj = batcher.build(mat)
+            if mesh_obj:
+                building_mesh_objs.append(mesh_obj)
+                current_objects.append(mesh_obj)
+                if show_buildings[0]:
+                    glrenderer.addObject(mesh_obj)
             
         # 4. Generate Debug Traffic Lines
         print("Generating Traffic Debug...")
@@ -396,6 +460,7 @@ def main():
         imgui.text(f"Edges: {len(city_gen.graph.edges)}")
         imgui.text("Green = Forward Lane")
         imgui.text("Red = Backward Lane")
+        
         imgui.separator()
         imgui.text("Skybox Controls")
         _, skybox.time_scale = imgui.slider_float("Time Scale", skybox.time_scale, 0.0, 50.0)
@@ -406,6 +471,25 @@ def main():
         m = int((skybox.current_time - h) * 60)
         imgui.text(f"Clock: {h:02d}:{m:02d}")
 
+        imgui.separator()
+        imgui.text("Camera Tracking")
+        
+        # Input Int for ID
+        changed, tracking_state["target_id"] = imgui.input_int("Car ID", tracking_state["target_id"])
+        
+        if not tracking_state["is_tracking"]:
+            if imgui.button("Track Car"):
+                tracking_state["is_tracking"] = True
+        else:
+            if imgui.button("Stop Tracking"):
+                tracking_state["is_tracking"] = False
+            
+            imgui.same_line()
+            if tracking_state["found"]:
+                imgui.text_colored("Following", 0.0, 1.0, 0.0)
+            else:
+                imgui.text_colored("Not Found", 1.0, 0.0, 0.0)
+
         imgui.end()
 
     # Initial Gen
@@ -414,7 +498,45 @@ def main():
 
     # Main Loop
     while not glfw.window_should_close(window.window):
-        camera.update(0.016)
+        
+        # Camera Update Logic
+        if not tracking_state["is_tracking"]:
+            camera.update(0.016)
+        else:
+            # Tracking Mode
+            target_agent = None
+            for a in agents:
+                if a.id == tracking_state["target_id"]:
+                    target_agent = a
+                    break
+            
+            tracking_state["found"] = (target_agent is not None)
+            
+            if target_agent:
+                # Third Person View: Behind and above
+                # orientation is normalized forward vector
+                offset_dist = 15.0
+                height_offset = 6.0
+                
+                # Position: Target - (Fwd * Dist) + Up
+                desired_pos = target_agent.position - (target_agent.orientation * offset_dist) + glm.vec3(0, height_offset, 0)
+                camera.position = desired_pos
+                
+                # Look At Target (slightly above center to see road)
+                look_target = target_agent.position + glm.vec3(0, 2.0, 0)
+                camera.front = glm.normalize(look_target - camera.position)
+                
+                # Update View Matrix directly
+                camera.updateView()
+                
+                # Sync Euler Angles to prevent snapping when tracking ends
+                # Pitch (X) - clamp to avoid singularity
+                pitch_rad = glm.asin(max(min(camera.front.y, 1.0), -1.0)) 
+                camera.euler_angles.x = glm.degrees(pitch_rad)
+                
+                # Yaw (Y)
+                # atan2(z, x) corresponds to the standard mapping used in Flycamera
+                camera.euler_angles.y = glm.degrees(glm.atan(camera.front.z, camera.front.x))
         
         # --- Traffic Simulation ---
         # 1. Spawn / Despawn
@@ -428,8 +550,26 @@ def main():
                 edge = random.choice(city_gen.graph.edges)
                 if hasattr(edge, 'lanes') and edge.lanes:
                     lane = random.choice(edge.lanes)
+                    
                     is_reckless = (random.random() < reckless_chance[0])
-                    ag = CarAgent(lane, is_reckless=is_reckless)
+                    car_types = [
+                        Ambulance, Bus, CyberpunkCar, Pickup, PoliceCar, 
+                        Sedan, SUV, Tank, Truck, Van
+                    ]
+                    # Random Car Type
+                    
+                    CarClass = random.choice(car_types)
+                    car_shape = CarClass()
+                    car_shape.create_geometry() # BaseVehicle needs this? 
+                    # Wait, BaseVehicle.create_geometry is called in its __init__?
+                    # Let's check vehicle.py BaseVehicle.__init__ from previous read.
+                    # Update: I read vehicle.py earlier. Init calls create_geometry. 
+                    # So car_shape = CarClass() is enough.
+                    
+                    ag = CarAgent(lane, car_shape=car_shape, is_reckless=is_reckless)
+                    
+                    # Random color tweak logic removed as these cars have fixed mats
+                    
                     agents.append(ag)
                     glrenderer.addObject(ag.mesh_object)
         
@@ -495,12 +635,12 @@ def main():
         agents = alive_agents
         
         # Handle Toggle Logic (State Sync)
-        if building_mesh_obj:
-            is_in_renderer = building_mesh_obj in glrenderer.objects
+        for b_obj in building_mesh_objs:
+            is_in_renderer = b_obj in glrenderer.objects
             if show_buildings[0] and not is_in_renderer:
-                glrenderer.addObject(building_mesh_obj)
+                glrenderer.addObject(b_obj)
             elif not show_buildings[0] and is_in_renderer:
-                glrenderer.objects.remove(building_mesh_obj)
+                glrenderer.objects.remove(b_obj)
 
         # Sync Clouds
         for cloud in clouds:

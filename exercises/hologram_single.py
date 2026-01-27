@@ -37,7 +37,7 @@ def main():
     ren = GLRenderer(win, cam)
 
     # 4. Load Texture
-    tex_path = os.path.join(BASE_DIR, "assets", "hologram.jpg")
+    tex_path = os.path.join(BASE_DIR, "assets/billboards/", "atari.jpg")
     if not os.path.exists(tex_path):
         print(f"Warning: Texture not found at {tex_path}")
         tex = None
