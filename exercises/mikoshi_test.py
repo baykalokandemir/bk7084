@@ -141,7 +141,7 @@ def main():
     camera.updateView()
     
     glrenderer = GLRenderer(glwindow, camera)
-    glrenderer.clear_color = [0.05, 0.05, 0.1, 1.0]
+    glrenderer.clear_color = [0.0, 0.0, 0.0, 1.0]
     glrenderer.init_post_process(width, height)
     
     # UI Manager (Handles ImGui Init & Input Chaining)
