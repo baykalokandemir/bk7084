@@ -39,7 +39,6 @@ def main():
     ui_manager.setup_input_chaining(window)
     
     config = SimulationState()
-    ui = CityUI(config)
     manager = CityManager(glrenderer)
     camera_ctrl = CameraController(camera)
 
@@ -53,6 +52,8 @@ def main():
         manager.regenerate(400, 400, found_textures, texture_dir)
         visuals.regenerate_clouds(15)
         visuals.regenerate_holograms(config.target_hologram_count)
+
+    ui = CityUI(config, manager, visuals, glrenderer, camera_ctrl, regenerate)
 
     regenerate()
 
@@ -74,11 +75,7 @@ def main():
         for agent in manager.agents: agent.render_debug(glrenderer, camera)
 
         # UI
-        ui_manager.render(lambda: ui.draw(
-            manager.city_gen, manager.agents, manager.static_objects + manager.crash_meshes + ([manager.signal_mesh] if manager.signal_mesh else []), 
-            glrenderer, manager.crash_shape, visuals.skybox, camera_ctrl, regenerate, 
-            lambda: visuals.regenerate_holograms(config.target_hologram_count)
-        ))
+        ui_manager.render(lambda: ui.draw())
         
         glfw.swap_buffers(window.window)
         glfw.poll_events()
