@@ -11,6 +11,7 @@ class SimulationState:
     show_buildings: bool = True
     show_clouds: bool = False
     show_holograms: bool = False
+    show_skybox: bool = True
     
     # Debug Flags
     crash_debug: bool = False

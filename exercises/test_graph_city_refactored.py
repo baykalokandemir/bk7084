@@ -427,6 +427,11 @@ def main():
         # 4. Cleanup Dead Agents
         
         # [NEW] Skybox managed by visuals.update()
+        is_skybox_in = visuals.skybox in glrenderer.objects
+        if config.show_skybox and not is_skybox_in:
+            glrenderer.addObject(visuals.skybox)
+        elif not config.show_skybox and is_skybox_in:
+            glrenderer.objects.remove(visuals.skybox)
 
         # Iterate copy or use list comprehension to filter
         alive_agents = []

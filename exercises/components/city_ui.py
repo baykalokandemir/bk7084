@@ -62,6 +62,7 @@ class CityUI:
         _, self.config.show_buildings = imgui.checkbox("Show Buildings", self.config.show_buildings)
         _, self.config.show_clouds = imgui.checkbox("Show Clouds", self.config.show_clouds)
         _, self.config.show_holograms = imgui.checkbox("Show Holograms", self.config.show_holograms)
+        _, self.config.show_skybox = imgui.checkbox("Show Skybox", self.config.show_skybox)
         _, self.config.crash_debug = imgui.checkbox("Crash Debug", self.config.crash_debug)
         _, self.config.print_stuck_debug = imgui.checkbox("Print Stuck Debug", self.config.print_stuck_debug)
         _, self.config.print_despawn_debug = imgui.checkbox("Print Despawn Debug", self.config.print_despawn_debug)
