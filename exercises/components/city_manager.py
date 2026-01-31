@@ -67,7 +67,7 @@ class CityManager:
         }
         if name in mapping:
             s = mapping[name]()
-            s.create_geometry()
+            # s.create_geometry() # REMOVED: Called in __init__
             return s
         return self.crash_shape
 

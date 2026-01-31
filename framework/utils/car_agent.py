@@ -57,7 +57,7 @@ class CarAgent:
                 body_color = glm.vec4(1.0, 1.0, 0.0, 1.0)
                 
             car_shape = Car(body_color=body_color)
-            car_shape.createGeometry()
+            # car_shape.createGeometry() # REMOVED: Called in __init__
             
         # 1. Store Vehicle Type
         if hasattr(car_shape, "__class__"):
