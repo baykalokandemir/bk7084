@@ -59,6 +59,15 @@ class CarAgent:
             car_shape = Car(body_color=body_color)
             car_shape.createGeometry()
             
+        # 1. Store Vehicle Type
+        if hasattr(car_shape, "__class__"):
+            self.vehicle_type = car_shape.__class__.__name__
+        else:
+            self.vehicle_type = "Unknown"
+            
+        # 2. Add State Attribute
+        self.state = "driving" # Can be "driving" or "crashed"
+            
         # Determine if car_shape is a raw Geometry (Shape) or a Full Object (BaseVehicle)
         from framework.shapes.shape import Shape
         if isinstance(car_shape, Shape):
@@ -84,6 +93,7 @@ class CarAgent:
              CarAgent.debug_sphere_mesh = MeshObject(sphere, mat)
 
     def update(self, dt, print_stuck_debug=False, print_despawn_debug=False):
+        if self.state == "crashed": return
         if not self.alive: return # Don't update dead agents
         
         # Check if we should debug stop
