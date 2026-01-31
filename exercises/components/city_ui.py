@@ -36,13 +36,7 @@ class CityUI:
         _, self.config.reckless_chance = imgui.slider_float("Reckless %", self.config.reckless_chance, 0.0, 1.0)
         
         if imgui.button("Clear Wrecks"):
-             # Cleanup specific to crash meshes managed by CityManager
-             count = len(self.manager.crash_meshes)
-             for obj in self.manager.crash_meshes:
-                 if obj in self.renderer.objects:
-                     self.renderer.objects.remove(obj)
-             self.manager.crash_meshes.clear()
-             print(f"[USER] Cleared {count} wrecks.")
+             self.manager.clear_crashes()
  
         _, self.config.target_agent_count = imgui.slider_int("Car Count", self.config.target_agent_count, 0, 50)
         
@@ -58,7 +52,8 @@ class CityUI:
         _, self.config.show_clouds = imgui.checkbox("Show Clouds", self.config.show_clouds)
         _, self.config.show_holograms = imgui.checkbox("Show Holograms", self.config.show_holograms)
         _, self.config.show_skybox = imgui.checkbox("Show Skybox", self.config.show_skybox)
-        _, self.config.crash_debug = imgui.checkbox("Crash Debug", self.config.crash_debug)
+        _, self.config.crash_debug = imgui.checkbox("Crash Debug (Technical)", self.config.crash_debug)
+        _, self.config.crash_report_debug = imgui.checkbox("Crash Report (N-Way)", self.config.crash_report_debug)
         _, self.config.print_stuck_debug = imgui.checkbox("Print Stuck Debug", self.config.print_stuck_debug)
         _, self.config.print_despawn_debug = imgui.checkbox("Print Despawn Debug", self.config.print_despawn_debug)
             

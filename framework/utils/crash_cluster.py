@@ -2,6 +2,8 @@ import glm
 import random
 from framework.objects.mesh_object import MeshObject
 from framework.materials.material import Material
+from framework.utils.mesh_batcher import MeshBatcher
+from framework.shapes.shape import Shape
 
 class CrashCluster:
     _id_counter = 0
@@ -24,8 +26,15 @@ class CrashCluster:
         # Use provided material or default
         mat = material if material else Material()
         
-        # Create visual wreck (using placeholder shape for now)
-        wreck_mesh = MeshObject(crash_shape, mat)
+        # Create visual wreck
+        if isinstance(crash_shape, Shape):
+             # Simple shape (like a cube)
+             wreck_mesh = MeshObject(crash_shape, mat)
+        else:
+             # Complex BaseVehicle - needs boolean batching or just flattening
+             batcher = MeshBatcher()
+             batcher.add_vehicle(crash_shape)
+             wreck_mesh = batcher.build(mat) # Forces the wreck material on all parts
         
         # Randomize transform to look like a wreck
         offset = glm.vec3(

@@ -7,6 +7,7 @@ from framework.utils.advanced_city_generator import AdvancedCityGenerator
 from framework.utils.mesh_generator import MeshGenerator
 from framework.utils.mesh_batcher import MeshBatcher
 from framework.utils.car_agent import CarAgent
+from framework.utils.crash_cluster import CrashCluster
 from framework.shapes.cube import Cube
 from framework.objects import MeshObject
 from framework.materials import Material, Texture
@@ -44,6 +45,7 @@ class CityManager:
         self.building_meshes = []
         self.signal_mesh = None
         self.crash_meshes = []
+        self.crash_clusters = [] # [NEW] Track persistent crash clusters
         
         # Optimization: Shared Crash Shape
         self.crash_shape = Cube(side_length=2.5, color=glm.vec4(1.0, 0.0, 0.0, 1.0))
@@ -56,6 +58,35 @@ class CityManager:
         if os.path.exists(self.texture_dir):
             found = [f for f in os.listdir(self.texture_dir) if f.lower().endswith(('.png', '.jpg', '.jpeg'))]
         return found
+        
+    def get_car_shape_by_name(self, name):
+        mapping = {
+            "Ambulance": Ambulance, "Bus": Bus, "CyberpunkCar": CyberpunkCar,
+            "Pickup": Pickup, "PoliceCar": PoliceCar, "Sedan": Sedan,
+            "SUV": SUV, "Tank": Tank, "Truck": Truck, "Van": Van
+        }
+        if name in mapping:
+            s = mapping[name]()
+            s.create_geometry()
+            return s
+        return self.crash_shape
+
+    def clear_crashes(self):
+        # 1. Remove wreck meshes from renderer
+        for obj in self.crash_meshes:
+            if obj in self.renderer.objects:
+                self.renderer.objects.remove(obj)
+        self.crash_meshes.clear()
+        
+        # 2. Clear clusters
+        self.crash_clusters.clear()
+        
+        # 3. Remove crashed agents (Despawn them)
+        # We need to filter self.agents to remove those with state="crashed"
+        # But wait, self.agents currently holds them.
+        self.agents = [a for a in self.agents if a.state != "crashed"]
+        
+        print(f"[CityManager] Cleared all crashes and despawned affected agents.")
 
     def regenerate_world(self, visuals, config, width=400, depth=400):
         self.regenerate(width, depth, self.found_textures, self.texture_dir)
@@ -83,6 +114,7 @@ class CityManager:
         for obj in self.crash_meshes:
             if obj in self.renderer.objects: self.renderer.objects.remove(obj)
         self.crash_meshes = []
+        self.crash_clusters = [] # [NEW] Clear clusters
         
         # 1. Generate Layout
         print("Generating BSP Layout...")
@@ -193,12 +225,19 @@ class CityManager:
         # 3. Update Agents
         alive_agents = []
         for agent in self.agents:
-             if agent.alive:
-                 agent.update(dt, config.print_stuck_debug, config.print_despawn_debug)
+             # Keep agents if they are driving OR crashed (don't remove crashed agents)
+             if agent.state == "driving":
+                 if agent.alive:
+                     agent.update(dt, config.print_stuck_debug, config.print_despawn_debug)
+                     alive_agents.append(agent)
+                 else:
+                     # Despawned normally
+                     if agent.mesh_object in self.renderer.objects:
+                         self.renderer.objects.remove(agent.mesh_object)
+             elif agent.state == "crashed":
+                 # Keep crashed agents in list but don't update them (they are static)
                  alive_agents.append(agent)
-             else:
-                 if agent.mesh_object in self.renderer.objects:
-                     self.renderer.objects.remove(agent.mesh_object)
+                 
         self.agents = alive_agents
         
         # 4. Signals
@@ -253,13 +292,58 @@ class CityManager:
              self.signal_mesh.draw_mode = gl.GL_LINES
              self.renderer.addObject(self.signal_mesh)
 
+    def _find_or_create_cluster(self, position, search_radius=8.0):
+        # Find existing cluster nearby
+        for cluster in self.crash_clusters:
+            if glm.distance(position, cluster.center) < search_radius:
+                return cluster
+        
+        # Create new if none found
+        cluster = CrashCluster()
+        cluster.center = position
+        self.crash_clusters.append(cluster)
+        return cluster
+
     def detect_crashes(self, config):
         # Spatial Hash
         spatial_grid = {}
         cell_size = 5.0
         
         for agent in self.agents:
+            if agent.state == "crashed": continue # Ignore already crashed agents in detection
             if not agent.alive: continue
+            
+            # Check if hitting an EXISTING cluster
+            # This enables N-way pile-ups where a driving car hits a wreck
+            hit_cluster = None
+            for cluster in self.crash_clusters:
+                # Use slightly larger radius for hitting a pile
+                if cluster.is_blocking(agent.position):
+                     hit_cluster = cluster
+                     break
+            
+            if hit_cluster:
+                # Driving agent hit a cluster!
+                agent.state = "crashed"
+                shape = self.get_car_shape_by_name(agent.vehicle_type)
+                wreck_mat = Material()
+                wreck_mat.uniforms = {"ambientStrength": 0.4, "diffuseStrength": 0.5, "specularStrength": 0.1}
+                
+                midpoint = agent.position # Rough approx
+                hit_cluster.add_agent(agent, midpoint, shape, wreck_mat)
+                
+                if agent.current_lane: agent.current_lane.crash_clusters.append(hit_cluster)
+                if agent.mesh_object in self.renderer.objects: self.renderer.objects.remove(agent.mesh_object)
+                
+                config.total_crashes += 1
+                
+                if config.crash_report_debug:
+                     count = len(hit_cluster.crashed_agents)
+                     ids = ", ".join([str(a.id) for a in hit_cluster.crashed_agents])
+                     print(f"[ACCIDENT] {count}-way car crash: cars {ids}")
+                
+                continue # Processed this agent
+                
             gx = int(agent.position.x // cell_size)
             gz = int(agent.position.z // cell_size)
             key = (gx, gz)
@@ -275,18 +359,50 @@ class CityManager:
                     a2 = cell_agents[j]
                     dist = glm.distance(a1.position, a2.position)
                     if dist < 2.5:
+                        # Collision!
                         if self._should_ignore_collision(a1, a2): continue
                         crashes.append((a1, a2))
                         
         for a1, a2 in crashes:
-            if not a1.alive or not a2.alive: continue
-            a1.alive = False
-            a2.alive = False
+            if a1.state == "crashed" or a2.state == "crashed": continue
+            
+            # Midpoint
             midpoint = (a1.position + a2.position) * 0.5
-            self.crash_events.append(midpoint)
+            
+            # 1. Update State
+            a1.state = "crashed"
+            a2.state = "crashed"
+            
+            # 2. Add to Cluster
+            cluster = self._find_or_create_cluster(midpoint)
+            
+            # Create real wreck shapes
+            shape1 = self.get_car_shape_by_name(a1.vehicle_type)
+            shape2 = self.get_car_shape_by_name(a2.vehicle_type)
+            
+            # Pass to cluster
+            wreck_mat = Material()
+            wreck_mat.uniforms = {"ambientStrength": 0.4, "diffuseStrength": 0.5, "specularStrength": 0.1}
+            
+            cluster.add_agent(a1, midpoint, shape1, wreck_mat)
+            cluster.add_agent(a2, midpoint, shape2, wreck_mat)
+            
+            # 3. Register with Lanes
+            if a1.current_lane: a1.current_lane.crash_clusters.append(cluster)
+            if a2.current_lane: a2.current_lane.crash_clusters.append(cluster)
+            
+            # 4. Remove original meshes
+            if a1.mesh_object in self.renderer.objects: self.renderer.objects.remove(a1.mesh_object)
+            if a2.mesh_object in self.renderer.objects: self.renderer.objects.remove(a2.mesh_object)
+            
             config.total_crashes += 1
             if config.crash_debug:
-                print(f"DEBUG: [Car {a1.id}] crashed into [Car {a2.id}].")
+                print(f"DEBUG: [Car {a1.id}] crashed into [Car {a2.id}]. Cluster ID: {cluster.id}")
+                
+            if config.crash_report_debug:
+                 count = len(cluster.crashed_agents)
+                 ids = ", ".join([str(a.id) for a in cluster.crashed_agents])
+                 print(f"[ACCIDENT] {count}-way car crash: cars {ids}")
 
     def _should_ignore_collision(self, a1, a2):
         if a1.current_lane and a2.current_lane and a1.current_lane != a2.current_lane:
@@ -296,21 +412,12 @@ class CityManager:
         return False
 
     def _update_crash_visuals(self):
-        # Clear old wrecks is handled by UI button basically, 
-        # but here we ADD new ones.
-        # Wait, the original code had "Clear Wrecks" button removing them.
-        # But also `crash_events` were processed to create meshes.
-        
-        if self.crash_events:
-            for pos in self.crash_events:
-                mat = Material()
-                mat.uniforms = {"ambientStrength": 1.0, "diffuseStrength": 0.0, "specularStrength": 0.0}
-                crash_obj = MeshObject(self.crash_shape, mat)
-                crash_obj.transform = glm.translate(pos)
-                
-                self.renderer.addObject(crash_obj)
-                self.crash_meshes.append(crash_obj)
-            self.crash_events.clear()
+        # Sync Cluster Meshes with Renderer
+        for cluster in self.crash_clusters:
+            for obj in cluster.get_renderables():
+                if obj not in self.renderer.objects:
+                    self.renderer.addObject(obj)
+                    self.crash_meshes.append(obj) # Keep tracking for manual clear logic if needed
 
     def get_static_meshes(self):
         return self.static_objects
