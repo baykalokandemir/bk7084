@@ -38,6 +38,7 @@ import imgui
 from framework.utils.ui_manager import UIManager
 from framework.utils.holograms_3d import Holograms3D, HologramConfig
 from exercises.components.simulation_state import SimulationState
+from exercises.components.city_ui import CityUI
 
 def main():
 
@@ -106,6 +107,9 @@ def main():
         "target_id": 0,
         "found": False # Feedback for GUI
     }
+
+    # [NEW] UI Component
+    ui = CityUI(config)
 
     def detect_crashes(active_agents):
         """
@@ -399,89 +403,7 @@ def main():
 
         print(f"Done. Nodes: {len(city_gen.graph.nodes)}, Edges: {len(city_gen.graph.edges)}")
 
-    def draw_ui():
-        """Captured UI logic"""
-        imgui.begin("City Controls")
-        
-        if imgui.button("Regenerate"):
-            regenerate()
-            
-        imgui.text(f"Total Crashes: {config.total_crashes}")
-            
-        _, config.num_cars_to_brake = imgui.input_int("Num to Brake", config.num_cars_to_brake)
-        if imgui.button("Brake Random Cars"):
-            count = min(config.num_cars_to_brake, len(agents))
-            if count > 0:
-                candidates = [a for a in agents if not a.manual_brake and not a.is_reckless]
-                targets = candidates if len(candidates) < count else random.sample(candidates, count)
-                for t in targets: t.manual_brake = True
-                print(f"[USER] Manually braked {len(targets)} cars.")
-        
-        if imgui.button("Release All"):
-            for a in agents: a.manual_brake = False
-            print("[USER] Released all manual brakes.")
-            
-        _, config.reckless_chance = imgui.slider_float("Reckless %", config.reckless_chance, 0.0, 1.0)
-        
-        if imgui.button("Clear Wrecks"):
-             to_remove = [obj for obj in current_objects if obj.mesh == crash_shape]
-             for obj in to_remove:
-                 if obj in glrenderer.objects: glrenderer.objects.remove(obj)
-                 current_objects.remove(obj)
-             print(f"[USER] Cleared {len(to_remove)} wrecks.")
 
-        _, config.target_agent_count = imgui.slider_int("Car Count", config.target_agent_count, 0, 50)
-        
-        imgui.separator()
-        imgui.text("Holograms")
-        changed, config.target_hologram_count = imgui.slider_int("Num Holograms", config.target_hologram_count, 0, 20)
-        if changed or imgui.button("Regenerate Holograms"):
-            regenerate_holograms()
-            
-        imgui.separator()
-            
-        _, config.show_buildings = imgui.checkbox("Show Buildings", config.show_buildings)
-        _, config.show_clouds = imgui.checkbox("Show Clouds", config.show_clouds)
-        _, config.show_holograms = imgui.checkbox("Show Holograms", config.show_holograms)
-        _, config.crash_debug = imgui.checkbox("Crash Debug", config.crash_debug)
-        _, config.print_stuck_debug = imgui.checkbox("Print Stuck Debug", config.print_stuck_debug)
-        _, config.print_despawn_debug = imgui.checkbox("Print Despawn Debug", config.print_despawn_debug)
-            
-        imgui.text(f"Nodes: {len(city_gen.graph.nodes)}")
-        imgui.text(f"Edges: {len(city_gen.graph.edges)}")
-        imgui.text("Green = Forward Lane")
-        imgui.text("Red = Backward Lane")
-        
-        imgui.separator()
-        imgui.text("Skybox Controls")
-        _, skybox.time_scale = imgui.slider_float("Time Scale", skybox.time_scale, 0.0, 50.0)
-        _, skybox.current_time = imgui.slider_float("Time of Day", skybox.current_time, 0.0, 24.0)
-        
-        # Display nicely
-        h = int(skybox.current_time)
-        m = int((skybox.current_time - h) * 60)
-        imgui.text(f"Clock: {h:02d}:{m:02d}")
-
-        imgui.separator()
-        imgui.text("Camera Tracking")
-        
-        # Input Int for ID
-        changed, tracking_state["target_id"] = imgui.input_int("Car ID", tracking_state["target_id"])
-        
-        if not tracking_state["is_tracking"]:
-            if imgui.button("Track Car"):
-                tracking_state["is_tracking"] = True
-        else:
-            if imgui.button("Stop Tracking"):
-                tracking_state["is_tracking"] = False
-            
-            imgui.same_line()
-            if tracking_state["found"]:
-                imgui.text_colored("Following", 0.0, 1.0, 0.0)
-            else:
-                imgui.text_colored("Not Found", 1.0, 0.0, 0.0)
-
-        imgui.end()
 
     # Initial Gen
     regenerate()
@@ -653,7 +575,10 @@ def main():
         glrenderer.render()
         
         # GUI
-        ui_manager.render(draw_ui)
+        ui_manager.render(lambda: ui.draw(
+            city_gen, agents, current_objects, glrenderer, crash_shape, 
+            skybox, tracking_state, regenerate, regenerate_holograms
+        ))
         
         # [NEW] Debug Render
         # Ideally render debug AFTER main render to draw on top, but depth test handles it.
