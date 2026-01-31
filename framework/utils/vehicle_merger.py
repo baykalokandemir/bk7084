@@ -37,7 +37,6 @@ class VehicleMerger:
             
             # FORCE geometry creation if not already done
             if not hasattr(mesh, 'vertices') or mesh.vertices is None or len(mesh.vertices) == 0:
-                print(f"[VehicleMerger] Part {i}: Creating geometry...")
                 if hasattr(mesh, 'createGeometry'):
                     mesh.createGeometry()
                 else:

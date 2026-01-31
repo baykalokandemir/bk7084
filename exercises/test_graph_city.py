@@ -21,14 +21,12 @@ from framework.objects.cloud import Cloud
 
 import random
 from framework.camera import Flycamera
-from framework.light import PointLight
 import OpenGL.GL as gl
 from framework.shapes.cars.ambulance import Ambulance
 from framework.shapes.cars.bus import Bus
 from framework.shapes.cars.cyberpunk_car import CyberpunkCar
 from framework.shapes.cars.pickup import Pickup
 from framework.shapes.cars.policecar import PoliceCar
-from framework.shapes.cars.racecar import RaceCar # check casing if fails
 from framework.shapes.cars.sedan import Sedan
 from framework.shapes.cars.suv import SUV
 from framework.shapes.cars.tank import Tank
@@ -82,14 +80,14 @@ def main():
     mesh_gen = MeshGenerator()
     
     # Toggle State
-    show_buildings = [False] 
+    show_buildings = [True] 
     crash_debug = [False] # Changed to list for mutability in nested func
     print_stuck_debug = [False]
     print_stuck_debug = [False]
     print_despawn_debug = [False]
     print_despawn_debug = [False]
-    show_clouds = [True] # [NEW] Toggle Clouds
-    show_holograms = [True] # [NEW] Toggle Holograms
+    show_clouds = [False] # [NEW] Toggle Clouds
+    show_holograms = [False] # [NEW] Toggle Holograms
 
     # Store explicit references
     current_objects = []
