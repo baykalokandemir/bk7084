@@ -331,7 +331,10 @@ class CityManager:
             if hit_cluster:
                 # Driving agent hit a cluster!
                 agent.state = "crashed"
-                shape = self.get_car_shape_by_name(agent.vehicle_type)
+                
+                # Reuse existing shape to preserve size/color
+                shape = agent.mesh_object.mesh if hasattr(agent.mesh_object, 'mesh') else self.get_car_shape_by_name(agent.vehicle_type)
+                
                 wreck_mat = Material()
                 wreck_mat.uniforms = {"ambientStrength": 0.4, "diffuseStrength": 0.5, "specularStrength": 0.1}
                 
@@ -388,9 +391,9 @@ class CityManager:
             # 2. Add to Cluster
             cluster = self._find_or_create_cluster(midpoint)
             
-            # Create real wreck shapes
-            shape1 = self.get_car_shape_by_name(a1.vehicle_type)
-            shape2 = self.get_car_shape_by_name(a2.vehicle_type)
+            # Reuse existing shapes
+            shape1 = a1.mesh_object.mesh if hasattr(a1.mesh_object, 'mesh') else self.get_car_shape_by_name(a1.vehicle_type)
+            shape2 = a2.mesh_object.mesh if hasattr(a2.mesh_object, 'mesh') else self.get_car_shape_by_name(a2.vehicle_type)
             
             # Pass to cluster
             wreck_mat = Material()
