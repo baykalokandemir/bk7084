@@ -5,6 +5,7 @@ from framework.objects.mesh_object import MeshObject
 from framework.shapes.uvsphere import UVSphere
 from framework.materials.material import Material
 from framework.utils.mesh_batcher import MeshBatcher
+from framework.shapes.cars.sedan import Sedan
 
 class CarAgent:
 
@@ -56,23 +57,17 @@ class CarAgent:
                 # Bright Yellow for Normal
                 body_color = glm.vec4(1.0, 1.0, 0.0, 1.0)
                 
-            car_shape = Car(body_color=body_color)
+            car_shape = Sedan(body_color=body_color)
             # car_shape.createGeometry() # REMOVED: Called in __init__
             
         # 1. Store Vehicle Type
-        if hasattr(car_shape, "__class__"):
-            self.vehicle_type = car_shape.__class__.__name__
-        else:
-            self.vehicle_type = "Unknown"
+        self.vehicle_type = car_shape.__class__.__name__
             
         # 2. Add State Attribute
         self.state = "driving" # Can be "driving" or "crashed"
 
         # 3. Store Radius
-        if hasattr(car_shape, 'bounding_radius'):
-            self.bounding_radius = car_shape.bounding_radius
-        else:
-            self.bounding_radius = 2.0 # Default for simple shapes
+        self.bounding_radius = getattr(car_shape, 'bounding_radius', 2.0)
             
         # Determine if car_shape is a raw Geometry (Shape) or a Full Object (BaseVehicle)
         from framework.shapes.shape import Shape
@@ -139,7 +134,7 @@ class CarAgent:
                         break
         
             # Check crash clusters on this lane
-            if self.current_lane and hasattr(self.current_lane, 'crash_clusters'):
+            if hasattr(self.current_lane, 'crash_clusters'):
                 for cluster in self.current_lane.crash_clusters:
                     # Check if cluster blocks US specifically (using our radius)
                     # Cluster radius + My radius + Margin
