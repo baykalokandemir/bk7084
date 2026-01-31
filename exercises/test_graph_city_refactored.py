@@ -1,4 +1,3 @@
-
 import os
 import sys
 import glfw
@@ -15,6 +14,7 @@ from exercises.components.simulation_state import SimulationState
 from exercises.components.city_ui import CityUI
 from exercises.components.city_visuals import CityVisuals
 from exercises.components.city_manager import CityManager
+from exercises.components.camera_controller import CameraController
 
 def main():
     try:
@@ -41,8 +41,7 @@ def main():
     config = SimulationState()
     ui = CityUI(config)
     manager = CityManager(glrenderer)
-    
-    tracking_state = {"is_tracking": False, "target_id": 0, "found": False}
+    camera_ctrl = CameraController(camera)
 
     # Texture Asset Scan
     texture_dir = os.path.join(os.path.dirname(__file__), "assets", "building_textures")
@@ -63,18 +62,7 @@ def main():
         time = glfw.get_time()
         
         # Camera
-        if not tracking_state["is_tracking"]:
-            camera.update(dt)
-        else:
-            target = next((a for a in manager.agents if a.id == tracking_state["target_id"]), None)
-            tracking_state["found"] = (target is not None)
-            if target:
-                offset_dist = 15.0
-                desired = target.position - (target.orientation * offset_dist) + glm.vec3(0, 6.0, 0)
-                camera.position = desired
-                camera.front = glm.normalize((target.position + glm.vec3(0, 2.0, 0)) - camera.position)
-                camera.updateView()
-                # Simple Euler sync to prevent snapping on exit (optional simplified)
+        camera_ctrl.update(dt, manager.agents)
 
         manager.update(dt, config)
         visuals.update(dt, time, config)
@@ -88,7 +76,7 @@ def main():
         # UI
         ui_manager.render(lambda: ui.draw(
             manager.city_gen, manager.agents, manager.static_objects + manager.crash_meshes + ([manager.signal_mesh] if manager.signal_mesh else []), 
-            glrenderer, manager.crash_shape, visuals.skybox, tracking_state, regenerate, 
+            glrenderer, manager.crash_shape, visuals.skybox, camera_ctrl, regenerate, 
             lambda: visuals.regenerate_holograms(config.target_hologram_count)
         ))
         

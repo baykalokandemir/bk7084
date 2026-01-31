@@ -5,7 +5,7 @@ class CityUI:
     def __init__(self, config):
         self.config = config
 
-    def draw(self, city_gen, agents, current_objects, glrenderer, crash_shape, skybox, tracking_state, on_regenerate, on_regenerate_holograms):
+    def draw(self, city_gen, agents, current_objects, glrenderer, crash_shape, skybox, camera_ctrl, on_regenerate, on_regenerate_holograms):
         """
         Draws the City Control UI.
         
@@ -83,20 +83,21 @@ class CityUI:
         imgui.text(f"Clock: {h:02d}:{m:02d}")
 
         imgui.separator()
+        imgui.separator()
         imgui.text("Camera Tracking")
         
         # Input Int for ID
-        changed, tracking_state["target_id"] = imgui.input_int("Car ID", tracking_state["target_id"])
+        changed, camera_ctrl.target_id = imgui.input_int("Car ID", camera_ctrl.target_id)
         
-        if not tracking_state["is_tracking"]:
+        if not camera_ctrl.is_tracking:
             if imgui.button("Track Car"):
-                tracking_state["is_tracking"] = True
+                camera_ctrl.track_agent(camera_ctrl.target_id)
         else:
             if imgui.button("Stop Tracking"):
-                tracking_state["is_tracking"] = False
+                camera_ctrl.stop_tracking()
             
             imgui.same_line()
-            if tracking_state["found"]:
+            if camera_ctrl.found:
                 imgui.text_colored("Following", 0.0, 1.0, 0.0)
             else:
                 imgui.text_colored("Not Found", 1.0, 0.0, 0.0)
