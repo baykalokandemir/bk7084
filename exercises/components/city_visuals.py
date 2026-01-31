@@ -78,11 +78,36 @@ class CityVisuals:
              self.holograms.append(holo)
              self.hologram_configs.append(cfg)
 
-    def update(self, dt, time):
+    def update(self, dt, time, config):
         self.skybox.update(dt)
         for i, holo in enumerate(self.holograms):
             holo.update(dt)
             holo.update_uniforms(self.hologram_configs[i], time)
+            
+        # Visibility Sync
+        # Skybox
+        is_skybox_in = self.skybox in self.renderer.objects
+        if config.show_skybox and not is_skybox_in:
+            self.renderer.addObject(self.skybox)
+        elif not config.show_skybox and is_skybox_in:
+            self.renderer.objects.remove(self.skybox)
+            
+        # Clouds
+        for cloud in self.clouds:
+             is_in = cloud.inst in self.renderer.objects
+             if config.show_clouds and not is_in:
+                 self.renderer.addObject(cloud.inst)
+             elif not config.show_clouds and is_in:
+                 self.renderer.objects.remove(cloud.inst)
+
+        # Holograms
+        for holo in self.holograms:
+            for obj in holo.objects:
+                is_in = obj in self.renderer.objects
+                if config.show_holograms and not is_in:
+                    self.renderer.addObject(obj)
+                elif not config.show_holograms and is_in:
+                    self.renderer.objects.remove(obj)
 
     def get_objects(self):
         """Returns flat list of all renderable objects."""
