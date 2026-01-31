@@ -36,9 +36,9 @@ import glfw
 import glm
 import imgui
 from framework.utils.ui_manager import UIManager
-from framework.utils.holograms_3d import Holograms3D, HologramConfig
 from exercises.components.simulation_state import SimulationState
 from exercises.components.city_ui import CityUI
+from exercises.components.city_visuals import CityVisuals
 
 def main():
 
@@ -56,21 +56,12 @@ def main():
     
     glrenderer = GLRenderer(window, camera)
     
-    # [NEW] Skybox & Lights
-    skybox = Skybox(time_scale=1.0) # 1.0 = 1 hour per second? No, logic depends on update. 
-    # update logic: current_time += dt * scale.
-    # If scale=1, 1 hour passes in 1 second.
     
-    glrenderer.addObject(skybox)
-    
-    # Add Sun and Moon to renderer lists
-    glrenderer.addLight(skybox.sun_light)
-    glrenderer.addLight(skybox.moon_light)
-    
-    # Keep original point light as a street lamp or remove?
-    # User said "we'd like to have a directional light source ... pointing to the center"
-    # Replacing the static point light seems correct.
-    # glrenderer.addLight(PointLight(glm.vec4(100.0, 200.0, 100.0, 1.0), glm.vec4(0.8, 0.8, 0.8, 1.0)))
+    # [NEW] Visuals Component (manages Skybox, Clouds, Holograms)
+    visuals = CityVisuals(glrenderer)
+    glrenderer.addObject(visuals.skybox)
+    glrenderer.addLight(visuals.skybox.sun_light)
+    glrenderer.addLight(visuals.skybox.moon_light)
 
     # ImGui Setup & UIManager
     ui_manager = UIManager(window.window)
@@ -91,14 +82,9 @@ def main():
     signal_mesh_obj = None 
     crash_shape = None 
 
-    # [NEW] Hologram State
-    holograms = [] # List of Holograms3D instances
-    hologram_configs = [] # List of HologramConfig instances
-    
     # [NEW] Agent State
     agents = []
-    crash_events = [] 
-    clouds = [] # [NEW]
+    crash_events = []
 
 
     # [NEW] Camera Tracking State
@@ -158,87 +144,10 @@ def main():
             if (config.crash_debug):
                 print(f"DEBUG: [Car {a1.id}] crashed into [Car {a2.id}] at {midpoint}.")
 
-    def regenerate_holograms():
-        """Generates random holograms."""
-        nonlocal holograms, hologram_configs
-        
-        # Clear existing
-        for holo in holograms:
-            for obj in holo.objects:
-                if obj in glrenderer.objects:
-                    glrenderer.objects.remove(obj)
-        holograms = []
-        hologram_configs = []
-        
-        print(f"Generating {config.target_hologram_count} holograms...")
-        
-        for i in range(config.target_hologram_count):
-             # Random Pos with Spacing Check
-             pos = glm.vec3(0, 40.0, 0)
-             valid = False
-             for attempt in range(10):
-                 rx = random.uniform(-180, 180)
-                 rz = random.uniform(-180, 180)
-                 candidate = glm.vec3(rx, 40.0, rz)
-                 
-                 # Check distance to existing
-                 too_close = False
-                 for h in holograms:
-                     if glm.distance(candidate, h.root_position) < 80.0:
-                         too_close = True
-                         break
-                 
-                 if not too_close:
-                     pos = candidate
-                     valid = True
-                     break
-            
-             if not valid:
-                 # Fallback to random if crowded
-                 pos = glm.vec3(random.uniform(-180, 180), 40.0, random.uniform(-180, 180))
-             
-             # Create Config
-             cfg = HologramConfig()
-             cfg.L_ITERATIONS = 2
-             cfg.L_SIZE_LIMIT = random.randint(3, 15) # Random size complexity
-             
-             # Random Color
-             # Neon Palette (0-255)
-             palette = [
-                 (0, 240, 255),  # Cyan
-                 (116, 238, 21),  # Lime
-                 (255, 231, 0),   # Yellow
-                 (240, 0, 255),   # Magenta
-                 (245, 39, 137)   # Pink
-             ]
-             choice = random.choice(palette)
-             # Normalize (0-1) and Boost (x3.0) for glow
-             rgb = [(c / 255.0) * 3.0 for c in choice]
-             cfg.POINT_CLOUD_COLOR = list(rgb)
-             
-             # Random Render Mode
-             if random.random() < 0.5:
-                 cfg.USE_POINT_CLOUD = True
-             else:
-                 cfg.USE_POINT_CLOUD = False
-                 # Random Slice Params
-                 cfg.SLICE_NORMAL = [random.random(), random.random(), random.random()]
-                 cfg.SLICE_SPEED = random.uniform(0.05, 0.2)
-             
-             # Create Logic
-             holo = Holograms3D(root_position=pos, scale=5.0)
-             holo.regenerate(cfg)
-             
-            # Register Objects
-             if config.show_holograms:
-                 for obj in holo.objects:
-                     glrenderer.addObject(obj)
-                 
-             holograms.append(holo)
-             hologram_configs.append(cfg)
+
 
     def regenerate():
-        nonlocal current_objects, city_mesh_obj, building_mesh_objs, debug_mesh_obj, signal_mesh_obj, agents, city_gen, crash_shape, holograms, hologram_configs
+        nonlocal current_objects, city_mesh_obj, building_mesh_objs, debug_mesh_obj, signal_mesh_obj, agents, city_gen, crash_shape
         
         # Clear old objects
         for obj in current_objects:
@@ -249,7 +158,8 @@ def main():
         building_mesh_objs = []
         debug_mesh_obj = None
         signal_mesh_obj = None
-        clouds[:] = [] # Clear clouds list
+        signal_mesh_obj = None
+        # clouds and holograms managed by visuals component
         crash_events[:] = [] # Clear list in place
         config.total_crashes = 0
         
@@ -383,23 +293,7 @@ def main():
             current_objects.append(fail_mesh)
         
         # 6. [NEW] Generate Random Clouds
-        print("Scattering Clouds...")
-        for _ in range(15): 
-            # Random position above the city
-            cx = random.uniform(-180, 180)
-            cz = random.uniform(-180, 180)
-            cy = random.uniform(80, 120) # Height - Moved Higher [USER]
-            c_scale = random.uniform(2.0, 5.0)
-            
-            # Create Cloud
-            cloud = Cloud(glrenderer, glm.vec3(cx, cy, cz), scale=c_scale)
-            current_objects.append(cloud.inst)
-            clouds.append(cloud)
-            
-            # Initial State Sync
-            if not config.show_clouds:
-                if cloud.inst in glrenderer.objects:
-                    glrenderer.objects.remove(cloud.inst)
+        visuals.regenerate_clouds(15)
 
         print(f"Done. Nodes: {len(city_gen.graph.nodes)}, Edges: {len(city_gen.graph.edges)}")
 
@@ -407,7 +301,7 @@ def main():
 
     # Initial Gen
     regenerate()
-    regenerate_holograms() # [NEW]
+    visuals.regenerate_holograms(config.target_hologram_count)
 
     # Main Loop
     while not glfw.window_should_close(window.window):
@@ -512,10 +406,8 @@ def main():
         else:
             signal_mesh_obj = None
             
-        # Update Holograms
-        for i, holo in enumerate(holograms):
-            holo.update(0.016)
-            holo.update_uniforms(hologram_configs[i], glfw.get_time())
+        # Update Visuals
+        visuals.update(0.016, glfw.get_time())
             
         # 3. Detect Crashes
         detect_crashes(agents)
@@ -534,8 +426,7 @@ def main():
             
         # 4. Cleanup Dead Agents
         
-        # [NEW] Skybox
-        skybox.update(0.016)
+        # [NEW] Skybox managed by visuals.update()
 
         # Iterate copy or use list comprehension to filter
         alive_agents = []
@@ -556,7 +447,7 @@ def main():
                 glrenderer.objects.remove(b_obj)
 
         # Sync Clouds
-        for cloud in clouds:
+        for cloud in visuals.clouds:
              is_in = cloud.inst in glrenderer.objects
              if config.show_clouds and not is_in:
                  glrenderer.addObject(cloud.inst)
@@ -564,7 +455,7 @@ def main():
                  glrenderer.objects.remove(cloud.inst)
 
         # Sync Holograms
-        for holo in holograms:
+        for holo in visuals.holograms:
             for obj in holo.objects:
                 is_in = obj in glrenderer.objects
                 if config.show_holograms and not is_in:
@@ -577,7 +468,8 @@ def main():
         # GUI
         ui_manager.render(lambda: ui.draw(
             city_gen, agents, current_objects, glrenderer, crash_shape, 
-            skybox, tracking_state, regenerate, regenerate_holograms
+            visuals.skybox, tracking_state, regenerate, 
+            lambda: visuals.regenerate_holograms(config.target_hologram_count)
         ))
         
         # [NEW] Debug Render
