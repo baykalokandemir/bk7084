@@ -87,6 +87,7 @@ class CityManager:
             debug_mesh = MeshObject(debug_shape, debug_mat)
             debug_mesh.draw_mode = gl.GL_LINES 
             self.static_objects.append(debug_mesh)
+            self.renderer.addObject(debug_mesh)
             
         # 5. Visualize Failures
         if hasattr(self.city_gen, 'dead_end_lanes') and self.city_gen.dead_end_lanes:
