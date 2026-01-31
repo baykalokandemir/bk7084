@@ -39,23 +39,15 @@ def main():
     ui_manager.setup_input_chaining(window)
     
     config = SimulationState()
-    manager = CityManager(glrenderer)
+    
+    # Texture Asset Path
+    texture_dir = os.path.join(os.path.dirname(__file__), "assets", "building_textures")
+    manager = CityManager(glrenderer, texture_dir)
     camera_ctrl = CameraController(camera)
 
-    # Texture Asset Scan
-    texture_dir = os.path.join(os.path.dirname(__file__), "assets", "building_textures")
-    found_textures = []
-    if os.path.exists(texture_dir):
-        found_textures = [f for f in os.listdir(texture_dir) if f.lower().endswith(('.png', '.jpg', '.jpeg'))]
+    ui = CityUI(config, manager, visuals, glrenderer, camera_ctrl)
 
-    def regenerate():
-        manager.regenerate(400, 400, found_textures, texture_dir)
-        visuals.regenerate_clouds(15)
-        visuals.regenerate_holograms(config.target_hologram_count)
-
-    ui = CityUI(config, manager, visuals, glrenderer, camera_ctrl, regenerate)
-
-    regenerate()
+    manager.regenerate_world(visuals, config)
 
     while not glfw.window_should_close(window.window):
         # Update

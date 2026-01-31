@@ -2,13 +2,12 @@ import imgui
 import random
 
 class CityUI:
-    def __init__(self, config, manager, visuals, renderer, camera_ctrl, on_regenerate):
+    def __init__(self, config, manager, visuals, renderer, camera_ctrl):
         self.config = config
         self.manager = manager
         self.visuals = visuals
         self.renderer = renderer
         self.camera_ctrl = camera_ctrl
-        self.on_regenerate = on_regenerate
 
     def draw(self):
         """
@@ -17,7 +16,7 @@ class CityUI:
         imgui.begin("City Controls")
         
         if imgui.button("Regenerate"):
-            self.on_regenerate()
+            self.manager.regenerate_world(self.visuals, self.config)
             
         imgui.text(f"Total Crashes: {self.config.total_crashes}")
             

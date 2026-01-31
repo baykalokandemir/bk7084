@@ -24,8 +24,9 @@ from framework.shapes.cars.truck import Truck
 from framework.shapes.cars.van import Van
 
 class CityManager:
-    def __init__(self, renderer):
+    def __init__(self, renderer, texture_dir):
         self.renderer = renderer
+        self.texture_dir = texture_dir
         self.city_gen = CityGenerator()
         self.mesh_gen = MeshGenerator()
         
@@ -42,6 +43,19 @@ class CityManager:
         self.crash_shape = Cube(side_length=2.5, color=glm.vec4(1.0, 0.0, 0.0, 1.0))
         self.crash_shape.createGeometry()
         
+        self.found_textures = self._scan_textures()
+        
+    def _scan_textures(self):
+        found = []
+        if os.path.exists(self.texture_dir):
+            found = [f for f in os.listdir(self.texture_dir) if f.lower().endswith(('.png', '.jpg', '.jpeg'))]
+        return found
+
+    def regenerate_world(self, visuals, config, width=400, depth=400):
+        self.regenerate(width, depth, self.found_textures, self.texture_dir)
+        visuals.regenerate_clouds(15)
+        visuals.regenerate_holograms(config.target_hologram_count)
+    
     def regenerate(self, width, depth, texture_list, texture_dir):
         # Cleanup
         for obj in self.static_objects:
