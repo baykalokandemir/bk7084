@@ -37,6 +37,7 @@ import glm
 import imgui
 from framework.utils.ui_manager import UIManager
 from framework.utils.holograms_3d import Holograms3D, HologramConfig
+from exercises.components.simulation_state import SimulationState
 
 def main():
 
@@ -78,15 +79,8 @@ def main():
     city_gen = CityGenerator()
     mesh_gen = MeshGenerator()
     
-    # Toggle State
-    show_buildings = [True] 
-    crash_debug = [False] # Changed to list for mutability in nested func
-    print_stuck_debug = [False]
-    print_stuck_debug = [False]
-    print_despawn_debug = [False]
-    print_despawn_debug = [False]
-    show_clouds = [False] # [NEW] Toggle Clouds
-    show_holograms = [False] # [NEW] Toggle Holograms
+    # [NEW] Simulation State
+    config = SimulationState()
 
     # Store explicit references
     current_objects = []
@@ -99,15 +93,10 @@ def main():
     # [NEW] Hologram State
     holograms = [] # List of Holograms3D instances
     hologram_configs = [] # List of HologramConfig instances
-    target_hologram_count = [5] # UI Slider State
     
     # [NEW] Agent State
     agents = []
-    target_agent_count = [1] 
-    num_cars_to_brake = [5] 
-    reckless_chance = [0.2] 
     crash_events = [] 
-    total_crashes = [0] 
     clouds = [] # [NEW]
 
 
@@ -160,8 +149,9 @@ def main():
             a2.alive = False
             midpoint = (a1.position + a2.position) * 0.5
             crash_events.append(midpoint)
-            total_crashes[0] += 1
-            if (crash_debug[0]):
+            config.total_crashes += 1
+            config.total_crashes += 1
+            if (config.crash_debug):
                 print(f"DEBUG: [Car {a1.id}] crashed into [Car {a2.id}] at {midpoint}.")
 
     def regenerate_holograms():
@@ -176,9 +166,9 @@ def main():
         holograms = []
         hologram_configs = []
         
-        print(f"Generating {target_hologram_count[0]} holograms...")
+        print(f"Generating {config.target_hologram_count} holograms...")
         
-        for i in range(target_hologram_count[0]):
+        for i in range(config.target_hologram_count):
              # Random Pos with Spacing Check
              pos = glm.vec3(0, 40.0, 0)
              valid = False
@@ -235,8 +225,8 @@ def main():
              holo = Holograms3D(root_position=pos, scale=5.0)
              holo.regenerate(cfg)
              
-             # Register Objects
-             if show_holograms[0]:
+            # Register Objects
+             if config.show_holograms:
                  for obj in holo.objects:
                      glrenderer.addObject(obj)
                  
@@ -257,7 +247,7 @@ def main():
         signal_mesh_obj = None
         clouds[:] = [] # Clear clouds list
         crash_events[:] = [] # Clear list in place
-        total_crashes[0] = 0
+        config.total_crashes = 0
         
         # Clear Crash Visuals
         to_remove = [obj for obj in glrenderer.objects if obj.mesh == crash_shape]
@@ -349,7 +339,7 @@ def main():
             if mesh_obj:
                 building_mesh_objs.append(mesh_obj)
                 current_objects.append(mesh_obj)
-                if show_buildings[0]:
+                if config.show_buildings:
                     glrenderer.addObject(mesh_obj)
             
         # 4. Generate Debug Traffic Lines
@@ -403,7 +393,7 @@ def main():
             clouds.append(cloud)
             
             # Initial State Sync
-            if not show_clouds[0]:
+            if not config.show_clouds:
                 if cloud.inst in glrenderer.objects:
                     glrenderer.objects.remove(cloud.inst)
 
@@ -416,11 +406,11 @@ def main():
         if imgui.button("Regenerate"):
             regenerate()
             
-        imgui.text(f"Total Crashes: {total_crashes[0]}")
+        imgui.text(f"Total Crashes: {config.total_crashes}")
             
-        _, num_cars_to_brake[0] = imgui.input_int("Num to Brake", num_cars_to_brake[0])
+        _, config.num_cars_to_brake = imgui.input_int("Num to Brake", config.num_cars_to_brake)
         if imgui.button("Brake Random Cars"):
-            count = min(num_cars_to_brake[0], len(agents))
+            count = min(config.num_cars_to_brake, len(agents))
             if count > 0:
                 candidates = [a for a in agents if not a.manual_brake and not a.is_reckless]
                 targets = candidates if len(candidates) < count else random.sample(candidates, count)
@@ -431,7 +421,7 @@ def main():
             for a in agents: a.manual_brake = False
             print("[USER] Released all manual brakes.")
             
-        _, reckless_chance[0] = imgui.slider_float("Reckless %", reckless_chance[0], 0.0, 1.0)
+        _, config.reckless_chance = imgui.slider_float("Reckless %", config.reckless_chance, 0.0, 1.0)
         
         if imgui.button("Clear Wrecks"):
              to_remove = [obj for obj in current_objects if obj.mesh == crash_shape]
@@ -440,22 +430,22 @@ def main():
                  current_objects.remove(obj)
              print(f"[USER] Cleared {len(to_remove)} wrecks.")
 
-        _, target_agent_count[0] = imgui.slider_int("Car Count", target_agent_count[0], 0, 50)
+        _, config.target_agent_count = imgui.slider_int("Car Count", config.target_agent_count, 0, 50)
         
         imgui.separator()
         imgui.text("Holograms")
-        changed, target_hologram_count[0] = imgui.slider_int("Num Holograms", target_hologram_count[0], 0, 20)
+        changed, config.target_hologram_count = imgui.slider_int("Num Holograms", config.target_hologram_count, 0, 20)
         if changed or imgui.button("Regenerate Holograms"):
             regenerate_holograms()
             
         imgui.separator()
             
-        _, show_buildings[0] = imgui.checkbox("Show Buildings", show_buildings[0])
-        _, show_clouds[0] = imgui.checkbox("Show Clouds", show_clouds[0])
-        _, show_holograms[0] = imgui.checkbox("Show Holograms", show_holograms[0])
-        _, crash_debug[0] = imgui.checkbox("Crash Debug", crash_debug[0])
-        _, print_stuck_debug[0] = imgui.checkbox("Print Stuck Debug", print_stuck_debug[0])
-        _, print_despawn_debug[0] = imgui.checkbox("Print Despawn Debug", print_despawn_debug[0])
+        _, config.show_buildings = imgui.checkbox("Show Buildings", config.show_buildings)
+        _, config.show_clouds = imgui.checkbox("Show Clouds", config.show_clouds)
+        _, config.show_holograms = imgui.checkbox("Show Holograms", config.show_holograms)
+        _, config.crash_debug = imgui.checkbox("Crash Debug", config.crash_debug)
+        _, config.print_stuck_debug = imgui.checkbox("Print Stuck Debug", config.print_stuck_debug)
+        _, config.print_despawn_debug = imgui.checkbox("Print Despawn Debug", config.print_despawn_debug)
             
         imgui.text(f"Nodes: {len(city_gen.graph.nodes)}")
         imgui.text(f"Edges: {len(city_gen.graph.edges)}")
@@ -541,18 +531,18 @@ def main():
         
         # --- Traffic Simulation ---
         # 1. Spawn / Despawn
-        while len(agents) > target_agent_count[0]:
+        while len(agents) > config.target_agent_count:
             removed = agents.pop()
             if removed.mesh_object in glrenderer.objects:
                 glrenderer.objects.remove(removed.mesh_object)
         
-        if len(agents) < target_agent_count[0]:
+        if len(agents) < config.target_agent_count:
             if city_gen.graph.edges:
                 edge = random.choice(city_gen.graph.edges)
                 if hasattr(edge, 'lanes') and edge.lanes:
                     lane = random.choice(edge.lanes)
                     
-                    is_reckless = (random.random() < reckless_chance[0])
+                    is_reckless = (random.random() < config.reckless_chance)
                     car_types = [
                         Ambulance, Bus, CyberpunkCar, Pickup, PoliceCar, 
                         Sedan, SUV, Tank, Truck, Van
@@ -578,7 +568,7 @@ def main():
         for node in city_gen.graph.nodes:
             node.update(0.016)
         for agent in agents:
-            agent.update(0.016, print_stuck_debug[0], print_despawn_debug[0])
+            agent.update(0.016, config.print_stuck_debug, config.print_despawn_debug)
             agent.render_debug(glrenderer, camera) # Debug Render
             
         # Phase 2: Render Dynamic Signals
@@ -638,26 +628,26 @@ def main():
         # Handle Toggle Logic (State Sync)
         for b_obj in building_mesh_objs:
             is_in_renderer = b_obj in glrenderer.objects
-            if show_buildings[0] and not is_in_renderer:
+            if config.show_buildings and not is_in_renderer:
                 glrenderer.addObject(b_obj)
-            elif not show_buildings[0] and is_in_renderer:
+            elif not config.show_buildings and is_in_renderer:
                 glrenderer.objects.remove(b_obj)
 
         # Sync Clouds
         for cloud in clouds:
              is_in = cloud.inst in glrenderer.objects
-             if show_clouds[0] and not is_in:
+             if config.show_clouds and not is_in:
                  glrenderer.addObject(cloud.inst)
-             elif not show_clouds[0] and is_in:
+             elif not config.show_clouds and is_in:
                  glrenderer.objects.remove(cloud.inst)
 
         # Sync Holograms
         for holo in holograms:
             for obj in holo.objects:
                 is_in = obj in glrenderer.objects
-                if show_holograms[0] and not is_in:
+                if config.show_holograms and not is_in:
                     glrenderer.addObject(obj)
-                elif not show_holograms[0] and is_in:
+                elif not config.show_holograms and is_in:
                     glrenderer.objects.remove(obj)
         
         glrenderer.render()
