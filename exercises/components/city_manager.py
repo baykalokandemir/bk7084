@@ -59,7 +59,19 @@ class CityManager:
             found = [f for f in os.listdir(self.texture_dir) if f.lower().endswith(('.png', '.jpg', '.jpeg'))]
         return found
         
-    def get_car_shape_by_name(self, name):
+    @staticmethod
+    def get_car_shape_by_name(name):
+        from framework.shapes.cars.ambulance import Ambulance
+        from framework.shapes.cars.bus import Bus
+        from framework.shapes.cars.cyberpunk_car import CyberpunkCar
+        from framework.shapes.cars.pickup import Pickup
+        from framework.shapes.cars.policecar import PoliceCar
+        from framework.shapes.cars.sedan import Sedan
+        from framework.shapes.cars.suv import SUV
+        from framework.shapes.cars.tank import Tank
+        from framework.shapes.cars.truck import Truck
+        from framework.shapes.cars.van import Van
+        
         mapping = {
             "Ambulance": Ambulance, "Bus": Bus, "CyberpunkCar": CyberpunkCar,
             "Pickup": Pickup, "PoliceCar": PoliceCar, "Sedan": Sedan,
@@ -67,9 +79,11 @@ class CityManager:
         }
         if name in mapping:
             s = mapping[name]()
-            # s.create_geometry() # REMOVED: Called in __init__
             return s
-        return self.crash_shape
+            
+        # Fallback to default Car instead of self.crash_shape
+        from framework.shapes.cars.car import Car
+        return Car()
 
     def clear_crashes(self):
         # 1. Remove wreck meshes from renderer
@@ -332,14 +346,8 @@ class CityManager:
                 # Driving agent hit a cluster!
                 agent.state = "crashed"
                 
-                # Reuse existing shape to preserve size/color
-                shape = agent.mesh_object.mesh if hasattr(agent.mesh_object, 'mesh') else self.get_car_shape_by_name(agent.vehicle_type)
-                
-                wreck_mat = Material()
-                wreck_mat.uniforms = {"ambientStrength": 0.4, "diffuseStrength": 0.5, "specularStrength": 0.1}
-                
                 midpoint = agent.position # Rough approx
-                hit_cluster.add_agent(agent, midpoint, shape, wreck_mat)
+                hit_cluster.add_agent(agent, midpoint)
                 
                 if agent.current_lane: agent.current_lane.crash_clusters.append(hit_cluster)
                 if agent.mesh_object in self.renderer.objects: self.renderer.objects.remove(agent.mesh_object)
@@ -391,16 +399,8 @@ class CityManager:
             # 2. Add to Cluster
             cluster = self._find_or_create_cluster(midpoint)
             
-            # Reuse existing shapes
-            shape1 = a1.mesh_object.mesh if hasattr(a1.mesh_object, 'mesh') else self.get_car_shape_by_name(a1.vehicle_type)
-            shape2 = a2.mesh_object.mesh if hasattr(a2.mesh_object, 'mesh') else self.get_car_shape_by_name(a2.vehicle_type)
-            
-            # Pass to cluster
-            wreck_mat = Material()
-            wreck_mat.uniforms = {"ambientStrength": 0.4, "diffuseStrength": 0.5, "specularStrength": 0.1}
-            
-            cluster.add_agent(a1, midpoint, shape1, wreck_mat)
-            cluster.add_agent(a2, midpoint, shape2, wreck_mat)
+            cluster.add_agent(a1, midpoint)
+            cluster.add_agent(a2, midpoint)
             
             # 3. Register with Lanes
             if a1.current_lane: a1.current_lane.crash_clusters.append(cluster)

@@ -6,7 +6,16 @@ from framework.utils.mesh_batcher import MeshBatcher
 from framework.shapes.shape import Shape
 
 class CrashCluster:
+    """
+    Represents a pile-up of crashed vehicles.
+    
+    Manages visual representation of wrecked cars and provides spatial
+    blocking for traffic avoidance. Clusters can grow as more vehicles
+    crash into existing pile-ups (chain reactions).
+    """
     _id_counter = 0
+    BASE_BLOCKING_RADIUS = 3.0
+    RADIUS_GROWTH_PER_CAR = 0.8
 
     def __init__(self):
         self.id = CrashCluster._id_counter
@@ -15,26 +24,29 @@ class CrashCluster:
         self.center = glm.vec3(0, 0, 0)
         self.crashed_agents = []
         self.mesh_objects = []
-        self.blocking_radius = 3.0
+        self.blocking_radius = self.BASE_BLOCKING_RADIUS
 
-    def add_agent(self, agent, collision_point, crash_shape, material=None):
+    def add_agent(self, agent, collision_point):
         """
         Adds an agent to the cluster and creates a visual wreck representation.
         """
         self.crashed_agents.append(agent)
         
-        # Use provided material or default
-        mat = material if material else Material()
+        # Recreate vehicle from agent's type
+        # Note: This creates a NEW instance, so we lose specific random colors/Sizes of the original agent.
+        # But it keeps the architecture clean.
+        from exercises.components.city_manager import CityManager
+        vehicle_shape = CityManager.get_car_shape_by_name(agent.vehicle_type)
         
-        # Create visual wreck
-        if isinstance(crash_shape, Shape):
-             # Simple shape (like a cube)
-             wreck_mesh = MeshObject(crash_shape, mat)
-        else:
-             # Complex BaseVehicle - needs boolean batching or just flattening
-             batcher = MeshBatcher()
-             batcher.add_vehicle(crash_shape)
-             wreck_mesh = batcher.build(mat) # Forces the wreck material on all parts
+        # Batch into single mesh
+        batcher = MeshBatcher()
+        batcher.add_vehicle(vehicle_shape)
+        
+        # Force wreck material
+        wreck_mat = Material()
+        wreck_mat.uniforms = {"ambientStrength": 0.4, "diffuseStrength": 0.5, "specularStrength": 0.1}
+        
+        wreck_mesh = batcher.build(wreck_mat) 
         
         # Randomize transform to look like a wreck
         offset = glm.vec3(
@@ -57,15 +69,16 @@ class CrashCluster:
                                
         self.mesh_objects.append(wreck_mesh)
         
-        # Recalculate Center based on all agents in cluster
-        if self.crashed_agents:
-            sum_pos = glm.vec3(0)
-            for a in self.crashed_agents:
-                sum_pos += a.position
-            self.center = sum_pos / len(self.crashed_agents)
+        # Incremental center update (more efficient)
+        old_count = len(self.crashed_agents) - 1  # Before we appended, wait we already appended.
+        # Logic: (OldAvg * OldN + NewVal) / NewN
+        if old_count == 0:
+            self.center = agent.position
+        else:
+            self.center = (self.center * old_count + agent.position) / len(self.crashed_agents)
             
-        # Update Blocking Radius (expands as pile-up grows)
-        self.blocking_radius = 3.0 + len(self.crashed_agents) * 0.8
+        # Update Blocking Radius
+        self.blocking_radius = self.BASE_BLOCKING_RADIUS + len(self.crashed_agents) * self.RADIUS_GROWTH_PER_CAR
 
     def is_blocking(self, position, safety_margin=4.0):
         """
