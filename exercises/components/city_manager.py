@@ -321,7 +321,10 @@ class CityManager:
             hit_cluster = None
             for cluster in self.crash_clusters:
                 # Use strict radius for hitting a pile (chain reaction)
-                if cluster.is_blocking(agent.position, safety_margin=0.5):
+                # Collision: distance < (cluster_radius + agent_radius) * overlap_factor
+                # is_blocking(pos, margin) checks dist < radius + margin
+                # So we want margin = agent.bounding_radius * 0.8 (some overlap)
+                if cluster.is_blocking(agent.position, safety_margin=agent.bounding_radius * 0.8):
                      hit_cluster = cluster
                      break
             
@@ -361,7 +364,13 @@ class CityManager:
                 for j in range(i + 1, len(cell_agents)):
                     a2 = cell_agents[j]
                     dist = glm.distance(a1.position, a2.position)
-                    if dist < 2.5:
+                    
+                    # Dynamic Collision Threshold
+                    # Radii sum is the touching point. 
+                    # We want a slight overlap for a crash (e.g. 0.9 factor) or just strict touch.
+                    collision_dist = (a1.bounding_radius + a2.bounding_radius) * 0.9
+                    
+                    if dist < collision_dist:
                         # Collision!
                         if self._should_ignore_collision(a1, a2): continue
                         crashes.append((a1, a2))
