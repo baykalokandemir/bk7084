@@ -3,7 +3,6 @@ import random
 from framework.objects.mesh_object import MeshObject
 from framework.materials.material import Material
 from framework.utils.mesh_batcher import MeshBatcher
-from framework.shapes.shape import Shape
 
 class CrashCluster:
     """
@@ -30,17 +29,30 @@ class CrashCluster:
         """
         Adds an agent to the cluster and creates a visual wreck representation.
         """
+        # Calculate old count before appending
+        old_count = len(self.crashed_agents)
+        
         self.crashed_agents.append(agent)
         
-        # Recreate vehicle from agent's type
-        # Note: This creates a NEW instance, so we lose specific random colors/Sizes of the original agent.
-        # But it keeps the architecture clean.
-        from exercises.components.city_manager import CityManager
-        vehicle_shape = CityManager.get_car_shape_by_name(agent.vehicle_type)
+        # [FIX] Try to reuse existing mesh from agent to preserve color/size
+        vehicle_shape = None
+        if hasattr(agent, 'mesh_object') and hasattr(agent.mesh_object, 'mesh'):
+             vehicle_shape = agent.mesh_object.mesh
+             
+        if vehicle_shape is None:
+             # Fallback: Recreate vehicle from agent's type
+             # This happens if mesh was already deleted or not fully initialized
+             from exercises.components.city_manager import CityManager
+             vehicle_shape = CityManager.get_car_shape_by_name(agent.vehicle_type)
         
         # Batch into single mesh
         batcher = MeshBatcher()
-        batcher.add_vehicle(vehicle_shape)
+        
+        # Check if it's a Complex BaseVehicle (has parts) or a simple Shape
+        if hasattr(vehicle_shape, 'parts'):
+             batcher.add_vehicle(vehicle_shape)
+        else:
+             batcher.add_shape(vehicle_shape)
         
         # Force wreck material
         wreck_mat = Material()
@@ -70,12 +82,11 @@ class CrashCluster:
         self.mesh_objects.append(wreck_mesh)
         
         # Incremental center update (more efficient)
-        old_count = len(self.crashed_agents) - 1  # Before we appended, wait we already appended.
-        # Logic: (OldAvg * OldN + NewVal) / NewN
         if old_count == 0:
             self.center = agent.position
         else:
-            self.center = (self.center * old_count + agent.position) / len(self.crashed_agents)
+            new_count = len(self.crashed_agents)
+            self.center = (self.center * old_count + agent.position) / new_count
             
         # Update Blocking Radius
         self.blocking_radius = self.BASE_BLOCKING_RADIUS + len(self.crashed_agents) * self.RADIUS_GROWTH_PER_CAR
