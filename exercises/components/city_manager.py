@@ -24,9 +24,15 @@ from framework.shapes.cars.truck import Truck
 from framework.shapes.cars.van import Van
 
 class CityManager:
-    def __init__(self, renderer, texture_dir):
+    def __init__(self, renderer, texture_dir=None):
         self.renderer = renderer
-        self.texture_dir = texture_dir
+        
+        if texture_dir is None:
+            # Auto-detect: ../assets/building_textures relative to this file
+            self.texture_dir = os.path.join(os.path.dirname(__file__), "..", "assets", "building_textures")
+        else:
+            self.texture_dir = texture_dir
+            
         self.city_gen = CityGenerator()
         self.mesh_gen = MeshGenerator()
         

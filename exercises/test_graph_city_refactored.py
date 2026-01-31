@@ -40,9 +40,7 @@ def main():
     
     config = SimulationState()
     
-    # Texture Asset Path
-    texture_dir = os.path.join(os.path.dirname(__file__), "assets", "building_textures")
-    manager = CityManager(glrenderer, texture_dir)
+    manager = CityManager(glrenderer)
     camera_ctrl = CameraController(camera)
 
     ui = CityUI(config, manager, visuals, glrenderer, camera_ctrl)
