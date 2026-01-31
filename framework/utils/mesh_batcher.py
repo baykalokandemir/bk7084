@@ -20,10 +20,19 @@ class MeshBatcher:
         transform: glm.mat4 (optional)
         color: glm.vec4 (optional override)
         """
-        # Ensure shape data is available (numpy arrays)
-        # We need to convert them to lists or process as numpy
+        # Ensure shape has geometry
+        if not hasattr(shape, 'vertices') or shape.vertices is None or len(shape.vertices) == 0:
+            if hasattr(shape, 'createGeometry'):
+                shape.createGeometry()
+            else:
+                print(f"[MeshBatcher] Shape has no vertices and no createGeometry method, skipping")
+                return
         
-        # Helper to get data
+        # Check again after creation attempt
+        if not hasattr(shape, 'vertices') or shape.vertices is None or len(shape.vertices) == 0:
+            print(f"[MeshBatcher] Still no vertices after createGeometry!")
+            return
+        
         s_verts = shape.vertices
         s_norms = shape.normals
         s_uvs = shape.uvs
@@ -36,48 +45,32 @@ class MeshBatcher:
 
         # Apply Transform
         if transform is not None:
-            # Transform vertices
-            # V_new = M * V
-            # We need to do this efficiently. 
-            # Convert to glm, transform, back to list? Or numpy math.
+            # Convert glm matrix to numpy
+            mat_list = transform.to_list()
+            m_np = np.array(mat_list, dtype=np.float32).reshape(4, 4)
             
-            # Numpy approach: (N, 4) * (4, 4)
-            # Vertices are (N, 4) [x, y, z, w]
-            # M is (4, 4)
-            # V_new = V @ M.T
-            
-            # m_np = np.array(transform.to_list(), dtype=np.float32).T # WRONG: glm list is cols, np array cols are rows.
-            m_np = np.array(transform.to_list(), dtype=np.float32)
+            # Transform vertices: V' = V @ M
             v_new = s_verts @ m_np
             
-            # Transform normals
-            # N_new = N @ (M_inv_trans).T = N @ M_inv
-            # Rotation only: N @ M.T (if orthogonal)
-            # Let's assume uniform scale/rotation.
-            # Normal matrix = mat3(transpose(inverse(model)))
-            # If we use glm:
-            nm = glm.transpose(glm.inverse(transform))
-            nm_np = np.array(nm.to_list(), dtype=np.float32)
+            # Transform normals using 3x3 rotation part
+            rot_3x3 = m_np[:3, :3]
             
-            # Normals are (N, 3) or (N, 4)? Shape usually stores (N, 3).
-            # If (N, 3), we need 3x3 matrix.
-            # Extract 3x3 from nm_np
-            nm_3x3 = nm_np[:3, :3] # ? Wait, nm_np is 4x4.
-            
-            # Let's just use 4x4 for normals with w=0
-            n_4 = np.hstack([s_norms, np.zeros((count, 1), dtype=np.float32)])
-            n_new_4 = n_4 @ nm_np
-            n_new = n_new_4[:, :3]
-            
-            # Normalize
-            norms = np.linalg.norm(n_new, axis=1, keepdims=True)
-            # Avoid divide by zero
-            norms[norms == 0] = 1.0
-            n_new = n_new / norms
+            # Handle normals
+            if s_norms is None or len(s_norms) == 0:
+                n_new = np.tile([0, 1, 0], (count, 1)).astype(np.float32)
+            else:
+                n_new = s_norms @ rot_3x3
+                # Normalize
+                norms = np.linalg.norm(n_new, axis=1, keepdims=True)
+                norms[norms < 0.0001] = 1.0
+                n_new = n_new / norms
             
         else:
             v_new = s_verts
-            n_new = s_norms
+            if s_norms is None or len(s_norms) == 0:
+                n_new = np.tile([0, 1, 0], (count, 1)).astype(np.float32)
+            else:
+                n_new = s_norms
             
         # Colors
         if color is not None:
@@ -90,7 +83,7 @@ class MeshBatcher:
                 c_new = np.ones((count, 4), dtype=np.float32)
 
         # UVs
-        u_new = s_uvs if s_uvs is not None else np.zeros((count, 2), dtype=np.float32)
+        u_new = s_uvs if s_uvs is not None and len(s_uvs) > 0 else np.zeros((count, 2), dtype=np.float32)
 
         # Append
         self.vertices.append(v_new)
@@ -98,16 +91,33 @@ class MeshBatcher:
         self.uvs.append(u_new)
         self.colors.append(c_new)
         
-        # Indices
-        # Offset indices
+        # Indices - offset them
         i_new = s_inds + self.index_offset
         self.indices.append(i_new)
         
         self.index_offset += count
 
-    def build(self, material):
+    def add_vehicle(self, vehicle):
+        """
+        Convenience method to add all parts from a BaseVehicle.
+        vehicle: BaseVehicle with parts[] attribute
+        """
+        if not hasattr(vehicle, 'parts') or not vehicle.parts:
+            print(f"[MeshBatcher] Vehicle has no parts to add!")
+            return
+        
+        for i, part in enumerate(vehicle.parts):
+            if not hasattr(part, 'mesh'):
+                print(f"[MeshBatcher] Part {i} has no mesh, skipping")
+                continue
+            
+            local_tf = part.local_transform if hasattr(part, 'local_transform') else glm.mat4(1.0)
+            self.add_shape(part.mesh, transform=local_tf)
+
+    def build(self, material=None):
         """
         Returns a MeshObject containing all batched geometry.
+        If material is None, returns just the Shape.
         """
         if not self.vertices:
             return None
@@ -129,4 +139,31 @@ class MeshBatcher:
         
         shape.createBuffers()
         
-        return MeshObject(shape, material)
+        if material is None:
+            return shape
+        else:
+            return MeshObject(shape, material)
+    
+    def reset(self):
+        """Clear the batcher to start a new batch"""
+        self.vertices = []
+        self.normals = []
+        self.uvs = []
+        self.colors = []
+        self.indices = []
+        self.index_offset = 0
+
+
+# Backwards compatibility alias
+class VehicleMerger:
+    """Legacy wrapper - use MeshBatcher instead"""
+    
+    @staticmethod
+    def merge_vehicle(vehicle):
+        """
+        Takes a BaseVehicle with parts[], returns a single Shape.
+        DEPRECATED: Use MeshBatcher.add_vehicle() instead.
+        """
+        batcher = MeshBatcher()
+        batcher.add_vehicle(vehicle)
+        return batcher.build()

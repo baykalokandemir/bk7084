@@ -7,6 +7,8 @@ from . import Texture
 
 class Material:
     def __init__(self, vertex_shader="shader.vert", fragment_shader="shader.frag", color_texture=None):
+        self.vertex_shader = vertex_shader
+        self.fragment_shader = fragment_shader
         filedir = os.path.join(os.path.dirname(os.path.realpath(__file__)), '..', 'shaders')
 
         defines_list = []
@@ -61,8 +63,38 @@ class Material:
         loc_light_pos   = gl.glGetUniformLocation(program, "light_position")
         loc_light_color = gl.glGetUniformLocation(program, "light_color")
 
-        light_pos   = np.array([l.position for l in lights], dtype=np.float32)
-        light_color = np.array([l.color for l in lights], dtype=np.float32)
+        light_pos_list = []
+        light_color_list = []
+        for l in lights:
+            if hasattr(l, 'direction'):
+                # Directional Light: use direction as position, w=0.0
+                d = l.direction
+                # Ensure vec4
+                if isinstance(d, glm.vec3):
+                   light_pos_list.append([d.x, d.y, d.z, 0.0])
+                elif isinstance(d, glm.vec4):
+                   light_pos_list.append([d.x, d.y, d.z, 0.0])
+                else: 
+                     # Fallback
+                     light_pos_list.append([0, 1, 0, 0])
+            else:
+                # Point Light: use position, w=1.0 (if not already set)
+                p = l.position
+                if isinstance(p, glm.vec3):
+                    light_pos_list.append([p.x, p.y, p.z, 1.0])
+                else:
+                    # vec4, keep w
+                    light_pos_list.append([p.x, p.y, p.z, p.w])
+            
+            # Color
+            c = l.color
+            if isinstance(c, glm.vec3):
+                light_color_list.append([c.x, c.y, c.z, 1.0])
+            else:
+                light_color_list.append([c.x, c.y, c.z, c.w])
+
+        light_pos   = np.array(light_pos_list, dtype=np.float32)
+        light_color = np.array(light_color_list, dtype=np.float32)
 
         gl.glUniform1i(loc_light_count, len(lights))
         gl.glUniform4fv(loc_light_pos, len(lights), light_pos)
