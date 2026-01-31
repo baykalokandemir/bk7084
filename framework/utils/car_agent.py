@@ -2,7 +2,6 @@ from pyglm import glm
 import random
 import math
 from framework.objects.mesh_object import MeshObject
-from framework.shapes.car import Car
 from framework.shapes.uvsphere import UVSphere
 from framework.materials.material import Material
 from framework.utils.mesh_batcher import MeshBatcher

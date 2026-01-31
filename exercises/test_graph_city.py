@@ -15,8 +15,6 @@ from framework.utils.mesh_batcher import MeshBatcher
 from framework.utils.car_agent import CarAgent
 from framework.shapes.cube import Cube 
 from framework.objects.skybox import Skybox
-from framework.shapes.quad import Quad
-from framework.objects.instanced_mesh_object import InstancedMeshObject
 from framework.objects.cloud import Cloud
 
 import random
