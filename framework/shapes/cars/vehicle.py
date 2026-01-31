@@ -55,7 +55,6 @@ class BaseVehicle(Object):
        """Calculate bounding radius from tracked extents"""
        import math
        self.bounding_radius = math.sqrt(self.max_x**2 + self.max_z**2)
-       print(f"{self.__class__.__name__}: radius={self.bounding_radius:.2f}m (x={self.max_x:.2f}, z={self.max_z:.2f})")
         
     def draw(self, camera, lights):
         for part in self.parts:
