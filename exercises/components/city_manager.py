@@ -316,9 +316,12 @@ class CityManager:
             # Check if hitting an EXISTING cluster
             # This enables N-way pile-ups where a driving car hits a wreck
             hit_cluster = None
+            # Check if hitting an EXISTING cluster
+            # This enables N-way pile-ups where a driving car hits a wreck
+            hit_cluster = None
             for cluster in self.crash_clusters:
-                # Use slightly larger radius for hitting a pile
-                if cluster.is_blocking(agent.position):
+                # Use strict radius for hitting a pile (chain reaction)
+                if cluster.is_blocking(agent.position, safety_margin=0.5):
                      hit_cluster = cluster
                      break
             

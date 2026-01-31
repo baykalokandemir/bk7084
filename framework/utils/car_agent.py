@@ -130,6 +130,13 @@ class CarAgent:
                         blocking_car_id = other.id
                         break
         
+            # Check crash clusters on this lane
+            if self.current_lane and hasattr(self.current_lane, 'crash_clusters'):
+                for cluster in self.current_lane.crash_clusters:
+                    if cluster.is_blocking(self.position, safety_margin=4.0):
+                        blocked = True
+                        break
+        
         if should_debug_stop:
              self.speed = 0.0
         else:
