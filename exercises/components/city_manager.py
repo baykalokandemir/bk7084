@@ -446,3 +446,18 @@ class CityManager:
         # But we hold the objects.
         # Let's let the caller handle toggling by iterating static_objects
         pass 
+
+    def brake_random_agents(self, count):
+        """Brake a random selection of non-reckless agents"""
+        candidates = [a for a in self.agents if not a.manual_brake and not a.is_reckless]
+        count = min(count, len(candidates))
+        if count > 0:
+            targets = random.sample(candidates, count)
+            for t in targets:
+                t.manual_brake = True
+        return count
+
+    def release_all_brakes(self):
+        """Release manual brakes on all agents"""
+        for a in self.agents:
+            a.manual_brake = False 
