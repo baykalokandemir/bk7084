@@ -2,7 +2,7 @@ from framework.shapes.shape import Shape
 from pyglm import glm
 import numpy as np
 
-class MeshGenerator:
+class TrafficDebugVisualizer:
     """
     Debug Visualization Tool.
     Primarily used now to visualize the invisible Traffic Graph logic over the BSP geometry.

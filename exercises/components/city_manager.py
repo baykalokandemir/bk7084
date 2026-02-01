@@ -4,7 +4,7 @@ import glm
 import OpenGL.GL as gl
 from framework.utils.traffic_graph_builder import TrafficGraphBuilder
 from framework.utils.advanced_city_generator import AdvancedCityGenerator
-from framework.utils.mesh_generator import MeshGenerator
+from framework.utils.traffic_debug_visualizer import TrafficDebugVisualizer
 from framework.utils.mesh_batcher import MeshBatcher
 from framework.utils.car_agent import CarAgent
 from framework.utils.crash_cluster import CrashCluster
@@ -35,7 +35,7 @@ class CityManager:
             self.texture_dir = texture_dir
             
         self.graph_builder = TrafficGraphBuilder()
-        self.mesh_gen = MeshGenerator()
+        self.debug_visualizer = TrafficDebugVisualizer()
         
         self.agents = []
         self.crash_events = []
@@ -144,7 +144,7 @@ class CityManager:
         
         # 4. Debug Lines
         print("Generating Traffic Debug...")
-        debug_shape = self.mesh_gen.generate_traffic_debug(self.graph_builder.graph)
+        debug_shape = self.debug_visualizer.generate_traffic_debug(self.graph_builder.graph)
         if len(debug_shape.vertices) > 0:
             debug_mat = Material()
             debug_mat.ambient_strength = 1.0 
@@ -293,7 +293,7 @@ class CityManager:
                     self.renderer.addObject(ag.mesh_object)
 
     def _update_signals(self):
-        signal_shape = self.mesh_gen.generate_dynamic_signals(self.graph_builder.graph)
+        signal_shape = self.debug_visualizer.generate_dynamic_signals(self.graph_builder.graph)
         
         if self.signal_mesh:
              if self.signal_mesh in self.renderer.objects: self.renderer.objects.remove(self.signal_mesh)
