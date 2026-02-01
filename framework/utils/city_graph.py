@@ -4,7 +4,12 @@ from pyglm import glm
 
 class Lane:
     """
-    Represents a single traffic lane.
+    Represents a single directional traffic lane within a road edge.
+    
+    Lanes are the fundamental navigation paths for vehicles, containing
+    waypoints that define the centerline path and registries for active
+    agents and crash clusters for collision detection and avoidance.
+    Each lane has explicit start and destination nodes for pathfinding.
     """
     _id_counter = 0
 
@@ -42,6 +47,21 @@ class Node:
     Represents an intersection in the city graph.
     """
     _id_counter = 0
+    
+    # Traffic light timing constants (seconds)
+    GREEN_DURATION = 5.0
+    YELLOW_DURATION = 2.0
+    RED_CLEARANCE_DURATION = 1.0
+    
+    # Turn detection thresholds
+    STRAIGHT_THRESHOLD = 0.5  # Dot product threshold for straight turns
+    RIGHT_TURN_THRESHOLD = 0.1  # Cross product threshold for right turns
+    
+    # Bezier curve control point distance ratio
+    BEZIER_CONTROL_RATIO = 0.5  # Control points at 50% of turn distance
+    
+    # Opposing lane detection threshold
+    OPPOSING_DOT_THRESHOLD = -0.8  # Dot product for opposite directions
 
     def __init__(self, x, y):
         self.id = Node._id_counter
@@ -75,9 +95,9 @@ class Node:
             p2 = glm.vec3(edge.end_node.x, 0, edge.end_node.y)
             edge_dir = glm.normalize(p2 - p1)
             
-            # Logic:
-            # Lane 0 is Forward (p1->p2)
-            # Lane 1 is Backward (p2->p1)
+            # Lane assignment is relative to this node:
+            # - At start_node: lanes[0] outgoing (toward end), lanes[1] incoming (from end)
+            # - At end_node: lanes[0] incoming (from start), lanes[1] outgoing (toward start)
             
             if edge.start_node == self:
                 # We are at p1.
@@ -111,27 +131,7 @@ class Node:
                 if in_lane.parent_edge == out_lane.parent_edge:
                     continue # Don't U-Turn immediately (optional)
                 
-                # Determine turn type by angle
-                # Cross product Y component tells Left vs Right
-                # Dot product tells Straight vs Reverse
-                
-                # angle 0 -> Straight (Dot ~ 1)
-                # angle -90 -> Right (Cross.y > 0? No, let's check)
-                # angle +90 -> Left
-                
-                dot = glm.dot(in_dir, out_dir)
-                cross_y = (in_dir.z * out_dir.x) - (in_dir.x * out_dir.z)
-                
-                # Heuristics
-                is_straight = dot > 0.5
-                is_right = cross_y > 0.1 # Right Hand Rule: X cross Z = -Y. 
-                # Wait, if Forward=(0,-1) and Right=(1,0). 
-                # x=0,z=-1. x=1,z=0.
-                # (z*x') - (x*z') = (-1*1) - (0*0) = -1. So CrossY < 0 is Right?
-                # Let's rely on standard: Right turn means out_dir is roughly -90 deg from in_dir.
-                
-                # We connect everything for now! Cars choose paths.
-                # Just need to generate valid geometry.
+                # We connect all valid lane pairs for pathfinding flexibility
                 
                 p0 = in_lane.waypoints[-1]
                 p3 = out_lane.waypoints[0]
@@ -141,9 +141,9 @@ class Node:
                 
                 # Control Points
                 # P1: Extend incoming tangent
-                p1 = p0 + (in_dir * (dist * 0.5))
+                p1 = p0 + (in_dir * (dist * Node.BEZIER_CONTROL_RATIO))
                 # P2: Extend outgoing tangent backwards
-                p2 = p3 - (out_dir * (dist * 0.5))
+                p2 = p3 - (out_dir * (dist * Node.BEZIER_CONTROL_RATIO))
                 
                 curve = get_bezier_points(p0, p1, p2, p3, steps=8)
                 
@@ -163,9 +163,11 @@ class Node:
             if not hasattr(edge, 'lanes'): continue
             p1 = glm.vec3(edge.start_node.x, 0, edge.start_node.y)
             p2 = glm.vec3(edge.end_node.x, 0, edge.end_node.y)
-            dist = glm.distance(p1, p2)
+            
+            direction = p2 - p1
+            dist = glm.length(direction)
             if dist < 0.001: continue
-            edge_dir = glm.normalize(p2 - p1)
+            edge_dir = direction / dist
             
             if edge.start_node == self and len(edge.lanes) > 1:
                  # Incoming is Lane 1 (Backward)
@@ -201,7 +203,7 @@ class Node:
                 dot = glm.dot(d1, d2)
                 # Opposite vectors have dot product ~ -1
                 
-                if dot < -0.8: # Roughly Opposite
+                if dot < Node.OPPOSING_DOT_THRESHOLD: # Roughly Opposite
                     if dot < min_dot: 
                          best_match = l2
                          min_dot = dot
@@ -221,8 +223,14 @@ class Node:
 
     def update(self, dt, print_debug=False):
         """
-        Updates the traffic light phase timer.
-        Cycle: GREEN (5s) -> YELLOW (2s) -> RED (1s) -> Next Phase
+        Updates traffic light phase timer and transitions between states.
+        
+        Implements a three-state cycle: GREEN → YELLOW → RED (clearance) → next phase.
+        When RED clearance expires, advances to next phase and returns to GREEN.
+        
+        Args:
+            dt: Delta time in seconds
+            print_debug: If True, prints state transitions to console
         """
         if not self.phases: return
         
@@ -232,13 +240,13 @@ class Node:
             # Transition
             if self.state == "GREEN":
                 self.state = "YELLOW"
-                self.phase_timer = 2.0
+                self.phase_timer = Node.YELLOW_DURATION
             elif self.state == "YELLOW":
                 self.state = "RED" # Clearance
-                self.phase_timer = 1.0
+                self.phase_timer = Node.RED_CLEARANCE_DURATION
             else: # RED or Init
                 self.state = "GREEN"
-                self.phase_timer = 5.0
+                self.phase_timer = Node.GREEN_DURATION
                 # Next Phase
                 self.current_phase_index = (self.current_phase_index + 1) % len(self.phases)
                 
@@ -247,7 +255,13 @@ class Node:
 
     def get_signal(self, lane_id):
         """
-        Returns signal state for a given incoming lane ID.
+        Returns current traffic signal state for a specific incoming lane.
+        
+        Args:
+            lane_id: ID of the lane to query
+        
+        Returns:
+            str: "GREEN", "YELLOW", or "RED" based on current phase and lane membership
         """
         if not self.phases: return "RED"
         
@@ -272,9 +286,20 @@ class Node:
 
 class Edge:
     """
-    Represents a road segment between two nodes.
-    Now contains detailed Lane objects.
+    Represents a bidirectional road segment between two nodes.
+    
+    Each edge automatically generates two lanes (forward and backward) with
+    waypoints offset from the centerline. Lanes are inset at endpoints to
+    create intersection gaps where connection curves can smoothly join.
     """
+    
+    # Lane generation constants
+    INTERSECTION_INSET_RATIO = 0.8  # Gap at intersections as ratio of width
+    INSET_SAFETY_RATIO = 0.4  # Fallback inset for short roads
+    MIN_LENGTH_FOR_INSET = 2.2  # Minimum length ratio to apply full inset
+    LANE_OFFSET_RATIO = 0.15  # Lane offset from centerline as ratio of width
+    WAYPOINT_STEP_SIZE = 5.0  # Distance between waypoints along lane
+
     def __init__(self, start_node, end_node, width=10.0, lanes_count=2):
         self.start_node = start_node
         self.end_node = end_node
@@ -315,12 +340,12 @@ class Edge:
         
         # 2. Inset Calculation (Gap at intersections)
         # Heuristic: Gap ~= Road Width (or 0.8 * Width)
-        inset = self.width * 0.8
+        inset = self.width * Edge.INTERSECTION_INSET_RATIO
         
         # Safety Check: Can we afford this inset?
-        if length < (inset * 2.2):
+        if length < (inset * Edge.MIN_LENGTH_FOR_INSET):
             # Reduced inset for very short roads to prevent inversion
-            inset = length * 0.4 
+            inset = length * Edge.INSET_SAFETY_RATIO 
             
         # 3. Calculate Effective Lane Start/End (Center Line Shortened)
         # Shift start forward by inset
@@ -333,10 +358,10 @@ class Edge:
         perp = glm.vec3(-dir_norm.z, 0, dir_norm.x)
         
         lane_width = self.width / self.lanes_count 
-        offset_dist = self.width * 0.15 
+        offset_dist = self.width * Edge.LANE_OFFSET_RATIO
         
         # [NEW] Helper: Interpolate Line for "Two-Point" Road Fix
-        def interpolate_line(p_start, p_end, step_size=5.0):
+        def interpolate_line(p_start, p_end, step_size=Edge.WAYPOINT_STEP_SIZE):
             points = []
             total_dist = glm.length(p_end - p_start)
             count = int(total_dist / step_size)
@@ -370,7 +395,11 @@ class Edge:
 
 class CityGraph:
     """
-    The main graph data structure representing the city road network.
+    Main graph data structure representing the city road network.
+    
+    Manages nodes (intersections), edges (road segments), and provides
+    utilities for graph construction, modification, and spatial queries.
+    Handles ID counter resets during clear operations.
     """
     def __init__(self):
         self.nodes = []
