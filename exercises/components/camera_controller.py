@@ -38,8 +38,6 @@ class CameraController:
                 self.camera.euler_angles.x = glm.degrees(pitch_rad)
                 self.camera.euler_angles.y = glm.degrees(glm.atan(self.camera.front.z, self.camera.front.x))
             else:
-                # If target lost, fallback to free cam or just stay? 
-                # Original logic just did nothing if target was None but kept is_tracking=True
-                # But we should probably allow moving camera if target is gone?
-                # For now, stick to original logic: if target not found, do nothing (camera stays put)
-                pass
+                # Target no longer exists, return to free camera
+                self.stop_tracking()
+                self.camera.update(dt)  # Resume normal movement

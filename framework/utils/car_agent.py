@@ -5,6 +5,7 @@ from framework.objects.mesh_object import MeshObject
 from framework.shapes.uvsphere import UVSphere
 from framework.materials.material import Material
 from framework.utils.mesh_batcher import MeshBatcher
+from framework.shapes.cars.sedan import Sedan
 
 class CarAgent:
 
@@ -56,8 +57,17 @@ class CarAgent:
                 # Bright Yellow for Normal
                 body_color = glm.vec4(1.0, 1.0, 0.0, 1.0)
                 
-            car_shape = Car(body_color=body_color)
-            car_shape.createGeometry()
+            car_shape = Sedan(body_color=body_color)
+            # car_shape.createGeometry() # REMOVED: Called in __init__
+            
+        # 1. Store Vehicle Type
+        self.vehicle_type = car_shape.__class__.__name__
+            
+        # 2. Add State Attribute
+        self.state = "driving" # Can be "driving" or "crashed"
+
+        # 3. Store Radius
+        self.bounding_radius = getattr(car_shape, 'bounding_radius', 2.0)
             
         # Determine if car_shape is a raw Geometry (Shape) or a Full Object (BaseVehicle)
         from framework.shapes.shape import Shape
@@ -84,6 +94,7 @@ class CarAgent:
              CarAgent.debug_sphere_mesh = MeshObject(sphere, mat)
 
     def update(self, dt, print_stuck_debug=False, print_despawn_debug=False):
+        if self.state == "crashed": return
         if not self.alive: return # Don't update dead agents
         
         # Check if we should debug stop
@@ -115,9 +126,26 @@ class CarAgent:
                         
                 if is_ahead:
                     dist = glm.distance(self.position, other.position)
-                    if dist < 4.0: # [TUNING] Safety Distance
+                    # Dynamic braking distance: my radius + his radius + safety margin
+                    safe_dist = self.bounding_radius + other.bounding_radius + 1.0 # [TUNING] 1.0m gap
+                    if dist < safe_dist:
                         blocked = True
                         blocking_car_id = other.id
+                        break
+        
+            # Check crash clusters on this lane
+            if hasattr(self.current_lane, 'crash_clusters'):
+                for cluster in self.current_lane.crash_clusters:
+                    # Check if cluster blocks US specifically (using our radius)
+                    # Cluster radius + My radius + Margin
+                    # cluster.is_blocking uses internally defined radius, let's assume it accounts for the pile
+                    # But we should pass a safety margin relative to OUR size check?
+                    # Actually cluster.is_blocking checks dist < (blocking_radius + safety_margin)
+                    # If we pass 0, it returns true if inside blocking_radius.
+                    # We want to stop if we are touching the blocking radius with our bounding radius.
+                    # So safety_margin should be self.bounding_radius + extra gap
+                    if cluster.is_blocking(self.position, safety_margin=self.bounding_radius + 1.5):
+                        blocked = True
                         break
         
         if should_debug_stop:
