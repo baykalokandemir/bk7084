@@ -2,7 +2,32 @@ from pyglm import glm
 import random
 
 class LSystem:
+    """
+    Lindenmayer System (L-system) for procedural generation of fractal patterns.
+    
+    Generates strings through recursive symbol substitution and interprets them
+    as 3D turtle graphics commands to produce branching structures. Commonly used
+    for procedural plants, trees, and organic patterns.
+    
+    Commands:
+        F: Move forward (creates transform)
+        +/-: Rotate around Z-axis (yaw)
+        &/^: Rotate around X-axis (pitch)
+        \\/: Rotate around Y-axis (roll)
+        [/]: Push/pop transform stack (branching)
+    """
+    
     def __init__(self, axiom="F", rules=None, angle=30.0, length=2.0, angle_range=None):
+        """
+        Initialize L-system with production rules and parameters.
+        
+        Args:
+            axiom: Starting string (default "F")
+            rules: Dict mapping symbols to replacement strings (default branching rule)
+            angle: Base rotation angle in degrees (default 30.0)
+            length: Forward movement distance (default 2.0)
+            angle_range: Optional (min_deg, max_deg) for randomized angles
+        """
         self.axiom = axiom
         self.rules = rules if rules is not None else {"F": "F[+F][-F]"}
         self.angle = glm.radians(angle)
@@ -10,15 +35,27 @@ class LSystem:
         self.angle_range = angle_range # Tuple (min_deg, max_deg)
 
     def generate_string(self, iterations=2):
+        """
+        Apply production rules recursively to generate L-system string.
+        
+        Args:
+            iterations: Number of recursive substitution steps
+        
+        Returns:
+            str: Generated L-system command string
+        """
         s = self.axiom
         for _ in range(iterations):
-            next_s = ""
-            for char in s:
-                next_s += self.rules.get(char, char)
-            s = next_s
+            s = "".join(self.rules.get(char, char) for char in s)
         return s
         
     def get_turn_angle(self):
+        """
+        Get rotation angle, randomized if angle_range is set.
+        
+        Returns:
+            float: Angle in radians
+        """
         if self.angle_range:
             deg = random.uniform(self.angle_range[0], self.angle_range[1])
             return glm.radians(deg)
@@ -26,14 +63,21 @@ class LSystem:
 
     def interpret_transforms(self, s, max_points=None):
         """
-        Interprets the string 's' into a list of glm.mat4 transforms.
-        Returns at most max_points transforms (if specified).
+        Interprets L-system string as 3D turtle graphics commands.
+        
+        Simulates a turtle moving through 3D space: F moves forward,
+        rotation commands change orientation, brackets push/pop state
+        for branching. Returns transform matrix at each F position.
+        
+        Args:
+            s: L-system command string
+            max_points: Optional limit on number of transforms returned
+        
+        Returns:
+            list[glm.mat4]: Transform matrices for each forward step
         """
         stack = []
-        
-        pos = glm.vec3(0, 0, 0)
         current_transform = glm.mat4(1.0)
-        
         results = []
         
         def add_result(mat):
@@ -74,5 +118,3 @@ class LSystem:
                     current_transform = stack.pop()
                     
         return results
-
-
