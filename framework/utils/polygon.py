@@ -10,7 +10,14 @@ class Polygon:
         self.vertices = [glm.vec2(v) if not isinstance(v, glm.vec2) else v for v in vertices]
 
     def is_convex(self):
-        # TODO: Implement convexity check if needed. For now assume convex.
+        """
+        Check if polygon is convex.
+        
+        Returns:
+            bool: Always True - all polygons are assumed convex by design.
+                  Non-convex polygons will produce undefined behavior in split(),
+                  inset(), and triangulate() operations.
+        """
         return True
 
     def triangulate(self):
@@ -57,10 +64,7 @@ class Polygon:
         for idx in top_indices:
             all_indices.append(top_start_idx + idx)
             
-        # 2. Bottom Face (y = 0)
-        # Vertices are the polygon vertices at y=0
-        # Winding order needs to be reversed for bottom face to point down?
-        # Or we just use normal (0, -1, 0) and standard winding (0, 2, 1)
+        # 2. Bottom Face (y = 0) with reversed winding for downward-facing normal
         bot_start_idx = len(all_vertices)
         for v in self.vertices:
             all_vertices.append(glm.vec4(v.x, 0, v.y, 1.0))
@@ -85,43 +89,13 @@ class Polygon:
             curr_v = self.vertices[i]
             next_v = self.vertices[(i + 1) % n_verts]
             
-            # Calculate face normal
-            # Edge vector
-            edge = next_v - curr_v
-            # Normal is perpendicular to edge in 2D (x, z) -> (z, -x)?
-            # Or just cross product in 3D.
-            # edge3 = (edge.x, 0, edge.y)
-            # up = (0, 1, 0)
-            # normal = cross(up, edge3) ? No, cross(edge3, up) -> (z, 0, -x) ?
-            
-            # Let's do cross product
+            # Calculate outward-facing normal for side wall (CCW winding assumed)
             p1 = glm.vec3(curr_v.x, 0, curr_v.y)
             p2 = glm.vec3(next_v.x, 0, next_v.y)
             edge_vec = p2 - p1
-            normal = glm.normalize(glm.cross(edge_vec, glm.vec3(0, 1, 0)))
-            # Wait, cross(edge, up).
-            # If edge is along X (1,0,0), up is (0,1,0). Cross is (0,0,1) -> Z. Correct.
-            # If edge is along -X (-1,0,0), up is (0,1,0). Cross is (0,0,-1) -> -Z. Correct.
-            # But we want outward facing normal.
-            # If polygon is CCW, edge goes counter-clockwise.
-            # Right hand rule: edge x up points INWARDS?
-            # Let's check.
-            # Square: (0,0) -> (1,0). Edge (1,0,0). Normal should be (0,0,-1) (facing -Z? No, facing -Z is "out" if center is 0.5, 0.5? No.)
-            # If vertices are (0,0), (1,0), (1,1), (0,1).
-            # Edge 1: (0,0)->(1,0). Edge=(1,0,0). Center is (0.5, 0.5). Normal should be (0,0,-1).
-            # Cross((1,0,0), (0,1,0)) = (0,0,1). This is +Z. This is INWARD.
-            # So we need cross(up, edge).
-            # Cross((0,1,0), (1,0,0)) = (0,0,-1). Correct.
-            
             normal = glm.normalize(glm.cross(glm.vec3(0, 1, 0), edge_vec))
             
-            # 4 Vertices for the quad
-            # Top-Left (curr, top)
-            # Top-Right (next, top)
-            # Bot-Right (next, bot)
-            # Bot-Left (curr, bot)
-            
-            # We need unique vertices for flat shading (normals are different from top/bot)
+            # Create quad vertices (TL, TR, BR, BL) with unique normals for flat shading
             base_idx = len(all_vertices)
             
             # TL
@@ -208,12 +182,7 @@ class Polygon:
                 poly1_verts.append(intersect_v)
                 poly2_verts.append(intersect_v)
         
-        # Filter out polygons with too few vertices
-        # Remove duplicates? (e.g. if vertex was on line, it might be added twice if we are not careful? No, logic above adds curr_v once, then intersect only if crossing.)
-        # If curr_d is 0 and next_d is 0, no crossing.
-        # If curr_d is 0 and next_d is 1, no crossing.
-        # If curr_d is -1 and next_d is 1, crossing.
-        
+        # Reject degenerate polygons (< 3 vertices)
         if len(poly1_verts) < 3 or len(poly2_verts) < 3:
              return self, None
 
@@ -221,6 +190,12 @@ class Polygon:
 
     @property
     def centroid(self):
+        """
+        Calculate geometric center of polygon.
+        
+        Returns:
+            glm.vec2: Average position of all vertices
+        """
         if not self.vertices:
             return glm.vec2(0, 0)
         return sum(self.vertices, glm.vec2(0, 0)) / len(self.vertices)
@@ -344,8 +319,14 @@ class Polygon:
 
     def intersect_line(self, line_point, line_dir):
         """
-        Finds the intersection points of an infinite line with the polygon edges.
-        Returns a list of glm.vec2 points.
+        Finds intersection points of an infinite line with polygon edges.
+        
+        Args:
+            line_point: Point on the line (glm.vec2)
+            line_dir: Direction vector of the line (glm.vec2)
+        
+        Returns:
+            list[glm.vec2]: Intersection points where line crosses polygon edges
         """
         intersections = []
         n = len(self.vertices)
