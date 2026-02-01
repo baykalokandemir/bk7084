@@ -15,7 +15,7 @@ class SimulationState:
     
     # Debug Flags
     crash_debug: bool = False
-    crash_report_debug: bool = False # [NEW] Detailed N-way crash reports
+    crash_report_debug: bool = False # Detailed N-way crash reports
     print_stuck_debug: bool = False
     print_despawn_debug: bool = False
     

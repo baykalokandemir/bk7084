@@ -38,10 +38,6 @@ class Trapezoid(Shape):
             glm.vec4(-s, -s, -s, 1.0), glm.vec4(-ts, s, -ts, 1.0),
             glm.vec4(-ts, s, ts, 1.0), glm.vec4(-s, -s, s, 1.0),
         ], dtype=np.float32)
-
-        # Normals need to be recalculated because faces are slanted.
-        # For simplicity in this low-poly style, we can approximate or calculate per face.
-        # Since we want flat shading, face normals are best.
         
         # Helper to calculate normal of a triangle/quad
         def calc_normal(p1, p2, p3):
@@ -49,15 +45,8 @@ class Trapezoid(Shape):
             v2 = glm.vec3(p3) - glm.vec3(p1)
             return glm.normalize(glm.cross(v1, v2))
 
-        # We can compute normals for each face based on the vertices we just defined.
         # Front face: 0, 1, 2
         n_front = calc_normal(self.vertices[0], self.vertices[1], self.vertices[2])
-        # Back face: 5, 4, 7 (reversed winding for back) -> 4, 5, 6 is back facing away? 
-        # Let's stick to the standard cube order and compute.
-        # Back indices in cube were: 5, 4, 7, 5, 7, 6. 
-        # Verts 4,5,6,7 are back. 4 is bottom-left-back (-s,-s,-s). 5 is bottom-right-back.
-        # 6 is top-right-back. 7 is top-left-back.
-        # Normal should point -Z roughly.
         n_back = calc_normal(self.vertices[5], self.vertices[4], self.vertices[7]) 
         
         n_top = glm.vec3(0, 1, 0) # Top is flat

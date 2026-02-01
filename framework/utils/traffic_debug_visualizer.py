@@ -30,18 +30,7 @@ class TrafficDebugVisualizer:
                 continue
                 
             for lane in edge.lanes:
-                # Determine color based on index or direction?
-                # We stored Forward first, Backward second in edge.generate_lanes()
-                # Lane 0 = Forward, Lane 1 = Backward (usually)
-                
-                # Check travel direction relative to edge?
-                # Lane waypoints are ordered in travel direction.
-                # Let's simple check if start point is closer to edge.start or edge.end
-                
                 start_wp = lane.waypoints[0]
-                
-                # Just color by index for now to separate them visually if needed, 
-                # or assume 0 is Fwd, 1 is Bwd based on our generating logic.
                 
                 color = c_fwd if lane == edge.lanes[0] else c_bwd
                 if len(edge.lanes) > 2:
@@ -58,13 +47,11 @@ class TrafficDebugVisualizer:
                     
                     verts.append(v1)
                     verts.append(v2)
-                    
-                    # [MODIFIED] Static Lanes = White (faint)
+
                     c_white = glm.vec4(1.0, 1.0, 1.0, 0.3)
                     colors.append(c_white)
                     colors.append(c_white)
         
-        # [MODIFIED] Removed Curves Loop (Moved to dynamic)
             
         # Pack into Shape
         if not verts: return Shape()
@@ -72,7 +59,7 @@ class TrafficDebugVisualizer:
         shape.vertices = np.array([v.to_list() for v in verts], dtype=np.float32)
         shape.colors = np.array([c.to_list() for c in colors], dtype=np.float32)
         
-        # Set Normals to UP to catch light (Lines don't have real normals)
+        # Set Normals to UP to catch light
         shape.normals = np.tile([0.0, 1.0, 0.0], (len(verts), 1)).astype(np.float32)
         
         shape.uvs = np.zeros((len(verts), 2), dtype=np.float32)
@@ -97,9 +84,6 @@ class TrafficDebugVisualizer:
         c_red = glm.vec4(1.0, 0.0, 0.0, 1.0)
         
         for node in graph.nodes:
-            # We need to map connections (which store geometry) to signal state (which is per Incoming Lane).
-            # Connection key is (from_lane_id, to_lane_id)
-            
             for key, curve_points in node.connections.items():
                 if len(curve_points) < 2: continue
                 

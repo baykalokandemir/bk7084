@@ -55,26 +55,14 @@ void main()
         float spotEffect = 1.0;
 
         if (isDirectional) {
-             // Directional Light: Position is actually Direction
-             // We want vector TO light. 
-             // If light_position is 'direction of light' (from sun to earth), L should be -direction.
-             // Usually directional light structure stores direction vector.
              L = normalize(-light_position[lid].xyz);
         } else {
-             // Point Light
              L = normalize(light_position[lid].xyz - frag_pos.xyz);
              float distance = length(light_position[lid].xyz - frag_pos.xyz);
              
-             if (lid > 0) { // Keep street light logic for point lights > 0... 
-                 // Actually relying on lid > 0 is risky if Sun is not 0.
-                 // But for now, we assume standard point lights are street lights.
-                 // Ideally we should use another uniform or property.
-                 
-                 // 1. Attenuation
+             if (lid > 0) { 
                  attenuation = 1.0 / (1.0 + 0.1 * distance + 0.05 * distance * distance);
 
-                 // 2. Spotlight (Downwards) - ONLY if it acts like a street lamp
-                 // Hardcoded logic for now as requested by user previously to keep it simple
                  vec3 spotDir = vec3(0.0, -1.0, 0.0);
                  float theta = dot(-L, spotDir);
                  float cutOff = 0.5; 

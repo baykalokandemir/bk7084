@@ -19,10 +19,10 @@ class Lane:
         self.width = width
         self.waypoints = waypoints # List of glm.vec3
         self.parent_edge = parent_edge
-        self.dest_node = dest_node # [NEW] Explicit destination
+        self.dest_node = dest_node # Explicit destination
         self.start_node = parent_edge.start_node if dest_node == parent_edge.end_node else parent_edge.end_node
-        self.active_agents = [] # [NEW] Registry for collision avoidance
-        self.crash_clusters = [] # [NEW] Registry for crash pile-ups
+        self.active_agents = [] # Registry for collision avoidance
+        self.crash_clusters = [] # Registry for crash pile-ups
 
     def __repr__(self):
         return f"Lane(id={self.id}, dest={self.dest_node.id})"
@@ -72,7 +72,7 @@ class Node:
         # Mapping (from_lane_id, to_lane_id) -> List[vec3] waypoints
         self.connections = {} 
         
-        # [NEW] Traffic Light State
+        # Traffic Light State
         self.phases = [] # List of lists of lane_ids (Simultaneous Green)
         self.current_phase_index = 0
         self.phase_timer = 0.0
@@ -85,8 +85,9 @@ class Node:
         self.connections = {}
         
         # 1. Identify Incoming and Outgoing Lanes
-        incoming = [] # List of (Lane, DirectionVec3)
-        outgoing = [] # List of (Lane, DirectionVec3)
+        # List of (Lane, DirectionVec3)
+        incoming = [] 
+        outgoing = []
         
         for edge in self.edges:
             if not hasattr(edge, 'lanes'): continue
@@ -132,7 +133,6 @@ class Node:
                     continue # Don't U-Turn immediately (optional)
                 
                 # We connect all valid lane pairs for pathfinding flexibility
-                
                 p0 = in_lane.waypoints[-1]
                 p3 = out_lane.waypoints[0]
                 
@@ -217,7 +217,7 @@ class Node:
         if not self.phases:
             self.phases.append([])
             
-        # [NEW] Randomize Start State
+        # Randomize Start State
         self.current_phase_index = random.randint(0, len(self.phases) - 1)
         self.phase_timer = random.uniform(0.0, 5.0) # Random offset into the cycle
 

@@ -68,10 +68,6 @@ class Cloud:
         sim_pos = glm.vec3(0.0)
         sim_ang = 0.0
         
-        # We need to simulate the path first to center it, 
-        # or we accept it's off-center and fix it later.
-        # Let's run the full interpretation logic but store relative positions first.
-        
         for char in s:
             if char == "F":
                 # Save current position
@@ -96,10 +92,6 @@ class Cloud:
             avg_pos = sum(points, glm.vec3(0)) / len(points)
             
         # Second pass: Generate Transforms centered around self.pos
-        # Note: In the original framework, visual generation happens iteratively.
-        # Here we post-process points to center them, which is a logic improvement 
-        # but deviating slightly from pure "draw as you go".
-        # However, to place the cloud AT self.pos, we must know its center.
         
         puff_size = glm.vec3(step_len * 2.5)
         # Rotation for flat cloud (face up)
@@ -110,13 +102,11 @@ class Cloud:
             local_p = p - avg_pos
             
             # Map 2D turtle (x,y) to 3D world (x,0,z) + Global Position
-            # We treat the cloud as lying in the XZ plane.
             final_pos = self.pos + glm.vec3(local_p.x, 0.0, local_p.y)
             
             T = glm.translate(final_pos) * base_quat * glm.scale(puff_size)
             
             transforms.append(T)
-            # Simple color (no gradient for this specific cloud)
             colors.append(self.color)
             
         return transforms, colors

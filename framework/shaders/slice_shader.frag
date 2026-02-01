@@ -15,13 +15,9 @@ uniform float slice_offset; // Animation offset
 void main()
 {
     // Calculate slice distance along the normal vector
-    // We use dot product to project world_pos onto the normal
-    
     float dist = dot(world_pos, normalize(slice_normal));
     
     // Apply non-linear distortion (sine wave)
-    // We use position perpendicular to normal for the wave phase if possible, 
-    // or just world position for simplicity
     dist += sin(world_pos.x * 10.0 + world_pos.z * 10.0) * warp_factor;
     
     // Apply animation offset

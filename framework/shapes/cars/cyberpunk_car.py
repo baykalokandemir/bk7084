@@ -71,7 +71,6 @@ class CyberpunkCar(BaseVehicle):
         self.add_box(c_body, glm.vec3(chassis_width, 0.8 * height_factor, rear_len), glm.vec3(0, 0.9 * height_factor, rear_z_pos), self.body_mat)
         
         # Rear Slats (The "Horizontal Bar Lighting" housing)
-        # Randomize number of slats?
         num_slats = random.randint(4, 7)
         for i in range(num_slats):
             y = 0.4 + i * 0.12
@@ -102,14 +101,13 @@ class CyberpunkCar(BaseVehicle):
         # Roof Louvers / Detail
         self.add_box(c_trim, glm.vec3(cabin_width * 0.8, 0.05, cabin_len * 0.8), glm.vec3(0, (1.4 * height_factor) + (cabin_h/2) + 0.02, cabin_z), self.body_mat)
         
-        # C-Pillar / Flying Buttresses (Triangular supports at back of cabin)
         # Left
         buttress_x = (cabin_width / 2)
         self.add_box(c_body, glm.vec3(0.2, cabin_h, cabin_len/2), glm.vec3(-buttress_x, 1.3 * height_factor, cabin_z - cabin_len/2 - 0.2), self.body_mat)
         # Right
         self.add_box(c_body, glm.vec3(0.2, cabin_h, cabin_len/2), glm.vec3(buttress_x, 1.3 * height_factor, cabin_z - cabin_len/2 - 0.2), self.body_mat)
 
-        # FILLER BLOCK (Fixing the hole in the middle)
+        # FILLER BLOCK
         self.add_box(c_mech, glm.vec3(chassis_width - 0.1, 0.8 * height_factor, 2.5 * len_factor), glm.vec3(0, 0.8 * height_factor, -0.2), self.body_mat)
 
         # --- 4. FRONT HOOD ---
@@ -148,13 +146,7 @@ class CyberpunkCar(BaseVehicle):
             # Cylinder headlights
             # Left
             self.add_wheel(0.15, 0.2, glm.vec3(-(chassis_width/2)+0.6, 0.7 * height_factor, hl_z_pos))
-            # Need to rotate these to face forward? add_wheel creates side-facing cylinders. 
-            # Re-using add_wheel for convenience but scaling it to be a flat disc facing forward is tricky without rotation in base class helpers.
-            # BaseVehicle.add_wheel rotates 90deg around Z.
-            # To face forward (Z), we need a different rotation. 
-            # Since I can't easily change base helper, I'll use small boxes to simulate "round-ish" or just 8-sided cylinders if I had a primitive.
-            # Actually, I'll swap 'circle' to just be 'quad_block' (4 small lights) to be safe with available primitives.
-             
+
             # Quad lights
             for off in [-0.2, 0.2]:
                  self.add_box(c_headlight, glm.vec3(0.15, 0.15, 0.1), glm.vec3(-(chassis_width/2)+0.6 + off, 0.7 * height_factor, hl_z_pos), self.glow_mat)
@@ -188,7 +180,7 @@ class CyberpunkCar(BaseVehicle):
             self.add_box(c_mech, glm.vec3(0.1, 0.4, 0.1), glm.vec3(fender_x + 0.27, 0.8, rear_fender_z + 0.3 - z*0.2), self.body_mat)
 
         # --- 6. SPOILER ---
-        # Randomize spoiler type?
+        # Randomize spoiler type
         spoiler_type = random.choice(['wing', 'ducktail', 'none'])
         
         if spoiler_type == 'wing':

@@ -37,8 +37,6 @@ void main()
     float scale_x = anim_x ? pulse : 1.0;
     float scale_y = anim_y ? pulse : 1.0;
     
-    // We must set point size to the LARGEST dimension to cover the area.
-    // The fragment shader will discard the excess to create the shape.
     float max_scale = max(scale_x, scale_y);
     
     // Attenuation
@@ -48,6 +46,5 @@ void main()
     if (gl_PointSize < 1.0) gl_PointSize = 1.0;
     
     // Calculate ratio of actual dimensions to the drawn square point
-    // If max_scale is scale_x, ratio.x = 1.0, ratio.y = scale_y / scale_x
     v_scale_ratios = vec2(scale_x, scale_y) / max_scale;
 }

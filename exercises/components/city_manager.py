@@ -96,8 +96,6 @@ class CityManager:
         self.crash_clusters.clear()
         
         # 3. Remove crashed agents (Despawn them)
-        # We need to filter self.agents to remove those with state="crashed"
-        # But wait, self.agents currently holds them.
         self.agents = [a for a in self.agents if a.state != "crashed"]
         
         print(f"[CityManager] Cleared all crashes and despawned affected agents.")
@@ -128,7 +126,7 @@ class CityManager:
         for obj in self.crash_meshes:
             if obj in self.renderer.objects: self.renderer.objects.remove(obj)
         self.crash_meshes = []
-        self.crash_clusters = [] # [NEW] Clear clusters
+        self.crash_clusters = [] # Clear clusters
         
         # 1. Generate Layout
         print("Generating BSP Layout...")
@@ -286,7 +284,6 @@ class CityManager:
                     is_reckless = (random.random() < reckless_chance)
                     CarClass = random.choice(car_types)
                     car_shape = CarClass()
-                    # car_shape.create_geometry() # init does this
                     
                     ag = CarAgent(lane, car_shape=car_shape, is_reckless=is_reckless)
                     self.agents.append(ag)
@@ -330,14 +327,7 @@ class CityManager:
             # Check if hitting an EXISTING cluster
             # This enables N-way pile-ups where a driving car hits a wreck
             hit_cluster = None
-            # Check if hitting an EXISTING cluster
-            # This enables N-way pile-ups where a driving car hits a wreck
-            hit_cluster = None
             for cluster in self.crash_clusters:
-                # Use strict radius for hitting a pile (chain reaction)
-                # Collision: distance < (cluster_radius + agent_radius) * overlap_factor
-                # is_blocking(pos, margin) checks dist < radius + margin
-                # So we want margin = agent.bounding_radius * 0.8 (some overlap)
                 if cluster.is_blocking(agent.position, safety_margin=agent.bounding_radius * 0.8):
                      hit_cluster = cluster
                      break

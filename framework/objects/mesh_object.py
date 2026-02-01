@@ -33,13 +33,6 @@ class MeshObject(Object):
         gl.glBindVertexArray(self.mesh.VAO)
 
         if self.mesh.IndexBO is not None and self.draw_mode != gl.GL_POINTS:
-             # If we have indices and we are NOT in point mode, use DrawElements.
-             # If we are in point mode, we usually want to draw all vertices as points, 
-             # but we could also use DrawElements if we wanted points at indices.
-             # For Mikoshi style, we likely want every vertex to be a point.
-             # However, if the mesh has indices, DrawElements is safer to respect the mesh structure.
-             # But usually point clouds ignore connectivity.
-             # Let's stick to DrawElements if indices exist, it works for GL_POINTS too.
             gl.glDrawElements(self.draw_mode, len(self.mesh.indices), gl.GL_UNSIGNED_INT, None)
         else:
             gl.glDrawArrays(self.draw_mode, 0, len(self.mesh.vertices))

@@ -43,19 +43,13 @@ class Skybox(MeshObject):
         noon_offset = 6.0
         angle = ((self.current_time - noon_offset) / 24.0) * math.pi * 2.0
         
-        # Rotate in XY plane (Rise East, Set West)
-        # Assuming X is East/West and Y is Up.
-        # cos(0) = 1 (X/East), sin(0) = 0.
-        # cos(pi/2) = 0, sin(pi/2) = 1 (Y/Up).
         
         orbit_radius = 1.0
-        # Reverting to positive sin because previous flip caused Sun to be underground at Noon.
         # Noon (Angle pi/2): sin=1 => +Y (Up).
         sun_dir = glm.vec3(math.cos(angle), math.sin(angle), 0.1) 
         sun_dir = glm.normalize(sun_dir)
         
         # Update Lights
-        # DirectionalLight.direction is direction OF rays (Sun to Earth) => -sun_dir
         self.sun_light.direction = -sun_dir
         self.moon_light.direction = sun_dir # Opposite
         
@@ -76,9 +70,6 @@ class Skybox(MeshObject):
         day_col_top = glm.vec3(0.1, 0.5, 0.9)
         day_col_bot = glm.vec3(0.6, 0.8, 0.95) # Cyan/White
         
-        # Interpolate
-        # Night (-1) -> Sunrise (0) -> Day (1)
-        
         top = glm.vec3(0)
         bot = glm.vec3(0)
         
@@ -95,8 +86,6 @@ class Skybox(MeshObject):
             self.moon_light.color = glm.vec4(0.2, 0.25, 0.4, 0.4) # Moon light
             
         else:
-            # Transition (-0.2 to 0.2)
-            # Normalize t from 0 to 1
             t = (height + 0.2) / 0.4 
             
             if height > 0: # 0 to 0.2 (Sunrise to Day)
@@ -116,17 +105,10 @@ class Skybox(MeshObject):
         self.material.uniforms["bottomColor"] = bot
         
     def draw(self, camera, lights):
-        # Disable Depth Mask to behave as background?
-        # Standard approach for skybox optimizing: Draw Last, Depth Func LEQUAL.
-        # Here we just rely on being big and maybe drawn first or last.
-        # But our shader forces Z=W (max depth).
-        # So we should draw it with LEQUAL.
         
         gl.glDepthFunc(gl.GL_LEQUAL)
-        # Cull Front because we are inside the sphere
         gl.glCullFace(gl.GL_FRONT) 
         
-        # Don't pass lights to skybox (it's unlit)
         super().draw(camera, [])
         
         gl.glCullFace(gl.GL_BACK) # Restore

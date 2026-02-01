@@ -49,7 +49,6 @@ void main()
     // 3. Vertical Strips
     // Map UV.x to sine wave
     float sine_val = sin(frag_uv.x * lines_frequency * 3.14159);
-    // Normalize -1..1 to 0..1
     float norm_sine = sine_val * 0.5 + 0.5;
     // Apply duty cycle (thickness)
     // smoothstep for anti-aliased edges

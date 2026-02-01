@@ -340,7 +340,6 @@ class Polygon:
             
             # Check intersection between Segment (p1, p2) and Line (line_point, line_dir)
             # p1 + t * edge_vec = line_point + u * line_dir
-            # Cross product method to solve 2D linear system
             
             # v x w = v.x * w.y - v.y * w.x
             def cross(v, w):
@@ -381,31 +380,18 @@ class Polygon:
             # Edge vectors
             v_in = glm.normalize(curr_v - prev_v)
             v_out = glm.normalize(next_v - curr_v)
-            
-            # Normals (CCW)
+
             # Normal is (-dy, dx)
             n1 = glm.vec2(-v_in.y, v_in.x)
             n2 = glm.vec2(-v_out.y, v_out.x)
             
-            # Shifted lines pass through:
-            # L1: (prev_v + n1 * amount) + t * v_in
-            # L2: (curr_v + n2 * amount) + u * v_out
-            
             p1_s = prev_v + n1 * amount
             p2_s = curr_v + n2 * amount
-            
-            # Find intersection of L1 and L2
-            # p1_s + t * v_in = p2_s + u * v_out
-            # t * v_in - u * v_out = p2_s - p1_s
-            
-            # Solve 2D system
-            # | v_in.x  -v_out.x | | t | = | dx |
-            # | v_in.y  -v_out.y | | u |   | dy |
             
             det = v_in.x * (-v_out.y) - v_in.y * (-v_out.x)
             
             if abs(det) < 1e-6:
-                # Parallel edges? Just use the shifted point
+                # Parallel edges: Just use the shifted point
                 new_verts.append(curr_v + n1 * amount)
             else:
                 delta = p2_s - p1_s

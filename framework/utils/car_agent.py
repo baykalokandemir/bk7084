@@ -136,14 +136,6 @@ class CarAgent:
             # Check crash clusters on this lane
             if hasattr(self.current_lane, 'crash_clusters'):
                 for cluster in self.current_lane.crash_clusters:
-                    # Check if cluster blocks US specifically (using our radius)
-                    # Cluster radius + My radius + Margin
-                    # cluster.is_blocking uses internally defined radius, let's assume it accounts for the pile
-                    # But we should pass a safety margin relative to OUR size check?
-                    # Actually cluster.is_blocking checks dist < (blocking_radius + safety_margin)
-                    # If we pass 0, it returns true if inside blocking_radius.
-                    # We want to stop if we are touching the blocking radius with our bounding radius.
-                    # So safety_margin should be self.bounding_radius + extra gap
                     if cluster.is_blocking(self.position, safety_margin=self.bounding_radius + 1.5):
                         blocked = True
                         break

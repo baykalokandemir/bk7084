@@ -19,17 +19,6 @@ uniform vec3 base_color;
 void main()
 {
     // Circular point shape (only for points)
-    // We can't easily detect primitive type here, but we can check if gl_PointCoord is being used.
-    // However, for triangles gl_PointCoord is undefined or (0,0).
-    // A better way is to use a uniform or just assume if it's not a point, we don't discard.
-    // But since we use the same shader, let's try to be smart.
-    
-    // Hack: If we are rendering triangles, we don't want circular discard.
-    // We can add a uniform `is_point` or similar.
-    // For now, let's just disable the discard if we are in mesh mode.
-    // But we don't have a uniform for that yet.
-    
-    // Let's add `uniform bool is_point_mode;`
     if (is_point_mode) {
         vec2 center_coord = gl_PointCoord - 0.5;
         
