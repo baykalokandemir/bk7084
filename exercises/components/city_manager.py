@@ -349,7 +349,8 @@ class CityManager:
                 midpoint = agent.position # Rough approx
                 hit_cluster.add_agent(agent, midpoint)
                 
-                if agent.current_lane: agent.current_lane.crash_clusters.append(hit_cluster)
+                if agent.current_lane and hit_cluster not in agent.current_lane.crash_clusters:
+                    agent.current_lane.crash_clusters.append(hit_cluster)
                 if agent.mesh_object in self.renderer.objects: self.renderer.objects.remove(agent.mesh_object)
                 
                 config.total_crashes += 1
@@ -403,8 +404,10 @@ class CityManager:
             cluster.add_agent(a2, midpoint)
             
             # 3. Register with Lanes
-            if a1.current_lane: a1.current_lane.crash_clusters.append(cluster)
-            if a2.current_lane: a2.current_lane.crash_clusters.append(cluster)
+            if a1.current_lane and cluster not in a1.current_lane.crash_clusters:
+                a1.current_lane.crash_clusters.append(cluster)
+            if a2.current_lane and cluster not in a2.current_lane.crash_clusters:
+                a2.current_lane.crash_clusters.append(cluster)
             
             # 4. Remove original meshes
             if a1.mesh_object in self.renderer.objects: self.renderer.objects.remove(a1.mesh_object)
@@ -440,12 +443,7 @@ class CityManager:
     def get_agent_meshes(self):
         return [a.mesh_object for a in self.agents]
     
-    def get_limit_meshes(self, show_buildings):
-        # Logic for toggling buildings
-        # This is strictly visual, maybe should be in external logic
-        # But we hold the objects.
-        # Let's let the caller handle toggling by iterating static_objects
-        pass 
+ 
 
     def brake_random_agents(self, count):
         """Brake a random selection of non-reckless agents"""
