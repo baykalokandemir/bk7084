@@ -2,7 +2,7 @@ from pyglm import glm
 import random
 import OpenGL.GL as gl
 from .l_system import LSystem
-from .grid_point_cloud_generator import GridPointCloudGenerator
+from .point_cloud_sampler import PointCloudSampler
 from ..shapes import Cube, UVSphere, Cylinder, Cone
 from ..materials import Material
 from ..objects import MeshObject
@@ -152,7 +152,7 @@ class Holograms3D:
     def _create_hologram_object(self, source_shape, spacing, color, transform):
         """Internal helper to create a Point Cloud MeshObject."""
         # 1. Generate Point Cloud Geometry
-        pc_shape = GridPointCloudGenerator.generate(source_shape, spacing=spacing)
+        pc_shape = PointCloudSampler.generate(source_shape, spacing=spacing)
         pc_shape.createBuffers()
         
         # 2. Create Unique Material Instance

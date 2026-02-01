@@ -10,7 +10,7 @@ from framework.camera import Flycamera
 from framework.objects import MeshObject
 from framework.materials import Material
 from framework.shapes import Cube
-from framework.utils.grid_point_cloud_generator import GridPointCloudGenerator
+from framework.utils.point_cloud_sampler import PointCloudSampler
 from framework.utils.ui_manager import UIManager
 from pyglm import glm
 import OpenGL.GL as gl
@@ -74,7 +74,7 @@ def main():
         # 2. Generate Point Cloud
         # Ensure spacing is safe (not 0)
         spacing = max(0.01, ui_state['grid_spacing'][0])
-        pc_shape = GridPointCloudGenerator.generate(base_cube, spacing=spacing)
+        pc_shape = PointCloudSampler.generate(base_cube, spacing=spacing)
         pc_shape.createBuffers()
         
         # 3. Material

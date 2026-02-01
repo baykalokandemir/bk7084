@@ -2,14 +2,57 @@ from pyglm import glm
 import numpy as np
 from ..shapes.shape import Shape
 
-class GridPointCloudGenerator:
+class PointCloudSampler:
+    """
+    Generates point cloud representations of 3D meshes via triplanar surface sampling.
+    
+    Uses a grid-based sampling strategy where the mesh is projected onto three
+    orthogonal planes (XY, XZ, YZ) based on triangle normal orientation. For each
+    triangle, points are generated on a regular grid in the dominant projection plane,
+    then tested for containment using barycentric coordinates before being projected
+    back to the triangle surface.
+    
+    This produces evenly-spaced point distributions across complex geometry without
+    requiring UV parameterization or pre-existing point data. Commonly used for
+    holographic displays and visual effects that require point-based rendering.
+    """
+    
+    # Sampling precision constants
+    EDGE_TOLERANCE = 1e-5  # Epsilon for catching points exactly on triangle edges
+    DEGENERACY_THRESHOLD = 1e-8  # Threshold for detecting degenerate triangles
+    NORMAL_COMPONENT_THRESHOLD = 1e-4  # Minimum normal component for valid projection
+
     @staticmethod
-    def generate(source_shape, spacing=0.2, color=glm.vec4(1.0)):
+    def generate(source_shape, spacing=0.2, color=glm.vec4(1.0, 1.0, 1.0, 1.0)):
         """
-        Generates a point cloud Shape from a source Shape by sampling its surface
-        using a triplanar grid projection.
+        Generates a point cloud Shape from a source Shape by sampling its surface.
         
-        spacing: distance between grid points in world space units.
+        Uses triplanar projection: for each triangle in the source mesh, determines
+        the dominant axis based on the triangle's normal vector, projects the triangle
+        onto the corresponding plane (XY, XZ, or YZ), generates grid points on that
+        plane, and projects valid points (those inside the triangle) back to the 3D
+        triangle surface.
+        
+        Args:
+            source_shape: Shape object to sample. Must have vertices and indices.
+            spacing: Distance between grid points in world space units (default 0.2)
+            color: RGBA color for all generated points (default white)
+        
+        Returns:
+            Shape: Point cloud shape with vertices at sampled surface positions,
+                   normals matching source triangle normals, and no indices
+                   (rendered as GL_POINTS)
+        
+        Algorithm:
+            1. Extract triangles from source mesh (handles indexed and non-indexed)
+            2. For each triangle:
+               - Calculate geometric normal via cross product
+               - Determine dominant axis (largest normal component)
+               - Project triangle to dominant plane and compute bounding box
+               - Generate grid points within bounding box
+               - Test each point for triangle containment (barycentric coordinates)
+               - Project valid points back to triangle plane using plane equation
+            3. Assemble all valid points into new Shape with point topology
         """
         # Ensure source geometry is created
         if len(source_shape.vertices) == 0:
@@ -29,8 +72,6 @@ class GridPointCloudGenerator:
                 v0 = glm.vec3(vertices[idx0][0], vertices[idx0][1], vertices[idx0][2])
                 v1 = glm.vec3(vertices[idx1][0], vertices[idx1][1], vertices[idx1][2])
                 v2 = glm.vec3(vertices[idx2][0], vertices[idx2][1], vertices[idx2][2])
-                # Access normals if available for better dominant axis selection?
-                # We can compute face normal from vertices.
                 triangles.append((v0, v1, v2))
         else:
             # Non-indexed mesh
@@ -45,7 +86,7 @@ class GridPointCloudGenerator:
         new_uvs = []
         
         # Small epsilon to catch points exactly on edges
-        epsilon = 1e-5
+        epsilon = PointCloudSampler.EDGE_TOLERANCE
 
         for v0, v1, v2 in triangles:
             # Calculate geometric normal
@@ -56,7 +97,8 @@ class GridPointCloudGenerator:
             # 1. Determine Dominant Axis
             nx, ny, nz = abs(normal.x), abs(normal.y), abs(normal.z)
             
-            # Helper to check point is in triangle 3D
+            # Helper to check if point lies within triangle using barycentric coordinates
+            # Returns true if point p is inside triangle (a, b, c) with small tolerance
             def is_in_triangle(p, a, b, c):
                 # Barycentric technique
                 v0 = c - a
@@ -70,7 +112,7 @@ class GridPointCloudGenerator:
                 dot12 = glm.dot(v1, v2)
 
                 denominator = dot00 * dot11 - dot01 * dot01
-                if abs(denominator) < 1e-8:
+                if abs(denominator) < PointCloudSampler.DEGENERACY_THRESHOLD:
                     return False
                     
                 invDenom = 1 / denominator
@@ -81,9 +123,10 @@ class GridPointCloudGenerator:
 
             points_on_tri = []
             
-            # Determine projection plane and scan
+            # Determine projection plane based on dominant normal axis
+            # Project triangle to 2D, generate grid, test containment, project back to 3D
             if nx >= ny and nx >= nz:
-                # X-Dominant: Project to YZ plane
+                # X-Dominant: Project to YZ plane, solve for X coordinate
                 # Plane eq: normal.x * x + normal.y * y + normal.z * z = D
                 # D = dot(normal, v0)
                 # x = (D - normal.y*y - normal.z*z) / normal.x
@@ -103,7 +146,7 @@ class GridPointCloudGenerator:
                     z = start_z
                     while z <= max_z + spacing:
                         # Solve X
-                        if abs(normal.x) > 1e-4:
+                        if abs(normal.x) > PointCloudSampler.NORMAL_COMPONENT_THRESHOLD:
                             x = (D - normal.y * y - normal.z * z) / normal.x
                             p = glm.vec3(x, y, z)
                             if is_in_triangle(p, v0, v1, v2):
@@ -128,7 +171,7 @@ class GridPointCloudGenerator:
                 while x <= max_x + spacing:
                     z = start_z
                     while z <= max_z + spacing:
-                        if abs(normal.y) > 1e-4:
+                        if abs(normal.y) > PointCloudSampler.NORMAL_COMPONENT_THRESHOLD:
                             y = (D - normal.x * x - normal.z * z) / normal.y
                             p = glm.vec3(x, y, z)
                             if is_in_triangle(p, v0, v1, v2):
@@ -153,7 +196,7 @@ class GridPointCloudGenerator:
                 while x <= max_x + spacing:
                     y = start_y
                     while y <= max_y + spacing:
-                        if abs(normal.z) > 1e-4:
+                        if abs(normal.z) > PointCloudSampler.NORMAL_COMPONENT_THRESHOLD:
                             z = (D - normal.x * x - normal.y * y) / normal.z
                             p = glm.vec3(x, y, z)
                             if is_in_triangle(p, v0, v1, v2):
@@ -176,6 +219,7 @@ class GridPointCloudGenerator:
         pc_shape.uvs = np.array(new_uvs, dtype=np.float32)
         pc_shape.indices = None
         
-        pc_shape.createGeometry = lambda: None 
+        # Dummy createGeometry to satisfy Shape API (point clouds don't need geometry creation)
+        pc_shape.createGeometry = lambda: None
         
         return pc_shape
