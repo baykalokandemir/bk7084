@@ -2,7 +2,7 @@ import os
 import random
 import glm
 import OpenGL.GL as gl
-from framework.utils.city_generator import CityGenerator
+from framework.utils.traffic_graph_builder import TrafficGraphBuilder
 from framework.utils.advanced_city_generator import AdvancedCityGenerator
 from framework.utils.mesh_generator import MeshGenerator
 from framework.utils.mesh_batcher import MeshBatcher
@@ -34,7 +34,7 @@ class CityManager:
         else:
             self.texture_dir = texture_dir
             
-        self.city_gen = CityGenerator()
+        self.graph_builder = TrafficGraphBuilder()
         self.mesh_gen = MeshGenerator()
         
         self.agents = []
@@ -137,14 +137,14 @@ class CityManager:
         
         # 2. Build Graph
         print("Building Traffic Graph...")
-        self.city_gen.build_graph_from_layout(adv_gen)
+        self.graph_builder.build_graph_from_layout(adv_gen)
         
         # 3. Batch Visuals
         self._batch_static_geometry(adv_gen, texture_list, texture_dir)
         
         # 4. Debug Lines
         print("Generating Traffic Debug...")
-        debug_shape = self.mesh_gen.generate_traffic_debug(self.city_gen.graph)
+        debug_shape = self.mesh_gen.generate_traffic_debug(self.graph_builder.graph)
         if len(debug_shape.vertices) > 0:
             debug_mat = Material()
             debug_mat.ambient_strength = 1.0 
@@ -156,10 +156,10 @@ class CityManager:
             self.renderer.addObject(debug_mesh)
             
         # 5. Visualize Failures
-        if hasattr(self.city_gen, 'dead_end_lanes') and self.city_gen.dead_end_lanes:
+        if hasattr(self.graph_builder, 'dead_end_lanes') and self.graph_builder.dead_end_lanes:
             self._batch_failures()
             
-        print(f"City Generated. Nodes: {len(self.city_gen.graph.nodes)}, Edges: {len(self.city_gen.graph.edges)}")
+        print(f"City Generated. Nodes: {len(self.graph_builder.graph.nodes)}, Edges: {len(self.graph_builder.graph.edges)}")
 
     def _batch_static_geometry(self, adv_gen, texture_list, texture_dir):
         print("Batching Visuals (BSP)...")
@@ -211,7 +211,7 @@ class CityManager:
 
     def _batch_failures(self):
         batcher = MeshBatcher()
-        for lane in self.city_gen.dead_end_lanes:
+        for lane in self.graph_builder.dead_end_lanes:
              if lane.waypoints:
                  p = lane.waypoints[-1]
                  c = Cube(color=glm.vec4(1.0, 1.0, 0.0, 0.8), side_length=3.0)
@@ -229,7 +229,7 @@ class CityManager:
 
     def update(self, dt, config):
         # 1. Update Nodes
-        for node in self.city_gen.graph.nodes:
+        for node in self.graph_builder.graph.nodes:
             node.update(dt)
             
         # 2. Maintain Population
@@ -278,8 +278,8 @@ class CityManager:
         
         # Spawn new
         if len(self.agents) < target_count:
-            if self.city_gen.graph.edges:
-                edge = random.choice(self.city_gen.graph.edges)
+            if self.graph_builder.graph.edges:
+                edge = random.choice(self.graph_builder.graph.edges)
                 if hasattr(edge, 'lanes') and edge.lanes:
                     lane = random.choice(edge.lanes)
                     
@@ -293,7 +293,7 @@ class CityManager:
                     self.renderer.addObject(ag.mesh_object)
 
     def _update_signals(self):
-        signal_shape = self.mesh_gen.generate_dynamic_signals(self.city_gen.graph)
+        signal_shape = self.mesh_gen.generate_dynamic_signals(self.graph_builder.graph)
         
         if self.signal_mesh:
              if self.signal_mesh in self.renderer.objects: self.renderer.objects.remove(self.signal_mesh)

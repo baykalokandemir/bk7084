@@ -5,7 +5,7 @@ from framework.utils.polygon import Polygon
 from framework.utils.building import Building
 from pyglm import glm
 
-class CityGenerator:
+class TrafficGraphBuilder:
     """
     Traffic Graph Builder.
     Converts a spatial layout (BSP) into a Node/Edge graph for traffic simulation.
@@ -13,11 +13,24 @@ class CityGenerator:
     """
     def __init__(self):
         self.graph = CityGraph()
-        self.buildings = []
 
     def build_graph_from_layout(self, layout_generator):
         """
-        Ingests the road network from a layout generator (e.g., AdvancedCityGenerator).
+        Converts road network from layout generator into traffic graph.
+        
+        Ingests road segments from AdvancedCityGenerator's road network,
+        creates nodes at segment endpoints (with spatial hashing to merge
+        duplicates), creates bidirectional edges between nodes, generates
+        intersection connection curves for smooth lane transitions, and
+        calculates traffic signal phases for each intersection.
+        
+        Args:
+            layout_generator: AdvancedCityGenerator instance with road_network
+        
+        Produces:
+            - self.graph: Populated CityGraph with nodes, edges, and lanes
+            - Intersection curves stored in node.connections
+            - Traffic signal phases in node.phases
         """
         self.graph.clear()
         rn = layout_generator.road_network
@@ -63,7 +76,8 @@ class CityGenerator:
 
             # 2. Get/Create Nodes (Spatial Hashing)
             def get_node(v):
-                # Key is rounded to 1 decimal place (10cm precision)
+                # Spatial hashing: round to 10cm precision to merge nearby endpoints
+                # This prevents duplicate nodes from floating-point inaccuracies
                 key = (round(v[0], 1), round(v[1], 1))
                 if key not in node_map:
                     node_map[key] = self.graph.add_node(key[0], key[1])
@@ -89,6 +103,21 @@ class CityGenerator:
         print(f"DEBUG: Graph Built. Nodes: {len(self.graph.nodes)} (Merged from raw endpoints). Edges: {edges_created}")
 
     def audit_graph(self, print_no_outlet=False):
+        """
+        Audits graph connectivity and identifies problematic lanes.
+        
+        Detects dead-end lanes (lanes with no outgoing connections at their
+        destination node) and loop edges (edges connecting a node to itself).
+        Stores dead-end lanes in self.dead_end_lanes for visualization or
+        debugging purposes.
+        
+        Args:
+            print_no_outlet: If True, prints all dead-end lane IDs to console
+        
+        Produces:
+            - self.dead_end_lanes: List of Lane objects with no outlets
+            - Console output summarizing audit results
+        """
         print("DEBUG: Auditing Graph Connectivity...")
         self.dead_end_lanes = []
         loop_count = 0
@@ -103,29 +132,11 @@ class CityGenerator:
             for lane in edge.lanes:
                 end_node = edge.end_node
                 
-                # If Lane is Backward (odd index usually, or stored in list), direction matters.
-                # In Edge.generate_lanes:
-                # Lanes 0..N-1 are Forward (Start->End)
-                # Lanes N..M are Backward (End->Start)
-                # Wait, my Edge logic splits them.
-                # If lane is in 'forward' set, end_node is edge.end_node.
-                # If lane is in 'backward' set, end_node is edge.start_node.
-                
-                # Let's rely on Lane Waypoints?
-                # Waypoints are ordered travel direction. 
-                # So lane.waypoints[-1] is near the "Exit Node".
-                # But which Node object is that?
-                # Lane doesn't store "Exit Node" reference directly, only Parent Edge.
-                
-                # Recalculate which node is the exit:
-                # Forward Lane: exit is edge.end_node
-                # Backward Lane: exit is edge.start_node
-                
-                # Check Edge.lanes structure:
-                # It currently generates a flat list. But how do we know which is Fwd/Bwd?
-                # We can check distance from last waypoint to nodes.
-                
                 if not lane.waypoints: continue
+                
+                # Determine which node is the exit for this lane
+                # Forward lanes exit at edge.end_node, backward lanes at edge.start_node
+                # We detect this by checking which node is closest to the last waypoint
                 last_wp = lane.waypoints[-1]
                 
                 n1_pos = glm.vec3(edge.start_node.x, 0, edge.start_node.y)
@@ -155,76 +166,3 @@ class CityGenerator:
         if (print_no_outlet):
             for i, lane in enumerate(self.dead_end_lanes):
                 print(f"[FAIL] Lane {lane.id} has no outlets.")
-
-    def generate_buildings(self):
-        """
-        Populate the city with buildings along the road edges.
-        """
-        self.buildings = []
-        
-        for edge in self.graph.edges:
-            # 1. Edge Vector & Normal
-            p1 = glm.vec2(edge.start_node.x, edge.start_node.y)
-            p2 = glm.vec2(edge.end_node.x, edge.end_node.y)
-            
-            vec = p2 - p1
-            length = glm.length(vec)
-            if length < 1.0: continue
-            
-            direction = glm.normalize(vec)
-            normal = glm.vec2(-direction.y, direction.x) # Perpendicular
-            
-            # Simple shrinking
-            start_dist = 2.0 
-            end_dist = length - 2.0
-            
-            if end_dist <= start_dist: continue
-            
-            # 3. Iterate along edge
-            curr_dist = start_dist
-            
-            while curr_dist + 10.0 < end_dist: # Ensure fits
-                # Current position on road center
-                pos = p1 + direction * curr_dist
-                
-                frontage_dist = (edge.width / 2) + 2.0
-                
-                # We place two buildings: Left (-Normal) and Right (+Normal)
-                for side in [-1, 1]:
-                    # Randomize Lot Size
-                    width = random.uniform(10.0, 14.0)
-                    depth = random.uniform(12.0, 20.0)
-                    
-                    # Calculate Center
-                    center_dist = frontage_dist + depth / 2.0
-                    center_pos = pos + (normal * side) * center_dist
-                    
-                    b_forward = normal * side
-                    b_right = direction
-                    
-                    # Corners
-                    half_w = width / 2.0
-                    half_d = depth / 2.0
-                    
-                    c1 = center_pos - b_right * half_w - b_forward * half_d
-                    c2 = center_pos + b_right * half_w - b_forward * half_d
-                    c3 = center_pos + b_right * half_w + b_forward * half_d
-                    c4 = center_pos - b_right * half_w + b_forward * half_d
-                    
-                    poly = Polygon([c1, c2, c3, c4])
-                    
-                    # Create Building Instance
-                    height = random.uniform(20.0, 60.0)
-                    
-                    # Random Style
-                    style = {
-                        "color": glm.vec4(random.random(), random.random(), random.random(), 1.0),
-                        "stepped": random.random() < 0.4,
-                        "window_ratio": random.uniform(0.4, 0.7)
-                    }
-                    
-                    b = Building(poly, height, style)
-                    self.buildings.append(b.generate())
-                
-                # Advance
-                curr_dist += width + random.uniform(2.0, 5.0) # Gap between buildings
