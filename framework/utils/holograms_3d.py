@@ -8,6 +8,14 @@ from ..materials import Material
 from ..objects import MeshObject
 
 class HologramConfig:
+    """
+    Configuration parameters for procedural hologram generation.
+    
+    Contains L-system parameters (iterations, size, angles), point cloud
+    rendering settings (spacing, color, glow), and animated slice shader
+    parameters (spacing, thickness, warp, speed). Used to customize
+    hologram appearance without modifying generator code.
+    """
     # L-System Parameters
     L_ITERATIONS = 2
     L_SIZE_LIMIT = 12
@@ -30,11 +38,16 @@ class HologramConfig:
     SLICE_NORMAL = [1.0, 0.6, 0.0]
     SLICE_WARP = 0.03
     SLICE_SPEED = 0.025
-    
-    # Post Process shared? Or per-object?
-    # Usually post-process is global, but these are object properties.
 
 class Holograms3D:
+    """
+    Procedural hologram cluster generator using L-systems and point clouds.
+    
+    Creates animated 3D structures by generating branching patterns via
+    L-systems, sampling geometry into point clouds, and applying group
+    rotation plus individual object spinning. Supports both point cloud
+    mode (holographic effect) and solid/slice mode (animated cross-sections).
+    """
     def __init__(self, root_position=glm.vec3(0, -1.0, 0), scale=1.0):
         self.objects = []
         self.root_position = root_position
@@ -48,7 +61,13 @@ class Holograms3D:
         self._anim_data = [] 
         
     def regenerate(self, config):
-        """Rebuilds the cluster based on config."""
+        """
+        Rebuilds hologram cluster based on configuration.
+        
+        Generates L-system string, interprets as transforms, creates shape pool,
+        and instantiates objects as either point clouds or solid meshes depending
+        on config.USE_POINT_CLOUD flag.
+        """
         self.objects = []
         self._anim_data = []
         
@@ -108,7 +127,12 @@ class Holograms3D:
             })
             
     def update(self, dt):
-        """Updates group and individual animations."""
+        """
+        Updates group rotation and individual object animations.
+        
+        Applies parent transform (translation, group rotation, scale) and
+        individual spin transforms (random axis rotation per object).
+        """
         # 1. Update Group
         self.group_rotation += self.group_speed * dt
         # Apply Translation * Rotation * Scale
